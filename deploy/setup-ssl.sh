@@ -6,7 +6,7 @@
 #
 # Examples:
 #   sudo bash deploy/setup-ssl.sh cusdec.yourdomain.com
-#   sudo bash deploy/setup-ssl.sh              (auto-detects IP with sslip.io)
+#   sudo bash deploy/setup-ssl.sh
 # ==============================================================================
 
 set -e
@@ -28,36 +28,57 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# 2. Detect public IP
-PUBLIC_IP=$(curl -s -4 icanhazip.com || curl -s -4 ifconfig.me || echo "")
+# 2. Reliably detect public IP (Checking AWS Metadata first, then fallback services)
+PUBLIC_IP=$(curl -s --max-time 2 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)
+if [ -z "$PUBLIC_IP" ]; then
+  PUBLIC_IP=$(curl -s -4 --max-time 3 icanhazip.com 2>/dev/null || curl -s -4 --max-time 3 ifconfig.me 2>/dev/null || curl -s -4 --max-time 3 api.ipify.org 2>/dev/null || echo "")
+fi
 
 # 3. Determine Domain
 TARGET_DOMAIN="$1"
 
 if [ -z "$TARGET_DOMAIN" ]; then
   echo -e ""
-  echo -e "You can configure HTTPS using either:"
-  echo -e "  1. A custom domain (e.g. ${YELLOW}cusdec.yourdomain.com${NC}) pointed to your static IP."
+  echo -e "Choose how you want to configure HTTPS:"
+  echo -e "  [1] Custom domain (e.g. ${YELLOW}cusdec.yourdomain.com${NC}) pointed to your static IP."
   if [ -n "$PUBLIC_IP" ]; then
-    echo -e "  2. Instant Free Static IP Domain: ${YELLOW}${PUBLIC_IP}.sslip.io${NC} (No domain purchase needed!)"
+    echo -e "  [2] Instant Free Static IP Domain: ${YELLOW}${PUBLIC_IP}.sslip.io${NC} (No domain purchase needed!)"
   fi
   echo -e ""
-  read -r -p "Enter your domain name [Press Enter to use ${PUBLIC_IP}.sslip.io]: " USER_INPUT_DOMAIN
+  read -r -p "Enter choice [1 or 2] or type your domain name: " USER_INPUT_DOMAIN
   
-  if [ -n "$USER_INPUT_DOMAIN" ]; then
-    TARGET_DOMAIN="$USER_INPUT_DOMAIN"
-  else
+  USER_INPUT_DOMAIN=$(echo "$USER_INPUT_DOMAIN" | xargs)
+
+  # If user typed '2' or left it blank
+  if [ "$USER_INPUT_DOMAIN" = "2" ] || [ -z "$USER_INPUT_DOMAIN" ]; then
     if [ -n "$PUBLIC_IP" ]; then
       TARGET_DOMAIN="${PUBLIC_IP}.sslip.io"
     else
-      echo -e "${RED}[ERROR] Could not detect public IP. Please specify a domain: sudo bash deploy/setup-ssl.sh yourdomain.com${NC}"
+      echo -e "${RED}[ERROR] Could not detect public IP. Please specify a domain name.${NC}"
       exit 1
     fi
+  elif [ "$USER_INPUT_DOMAIN" = "1" ]; then
+    read -r -p "Please enter your custom domain name (e.g. cusdec.yourdomain.com): " CUSTOM_DOMAIN
+    TARGET_DOMAIN=$(echo "$CUSTOM_DOMAIN" | xargs)
+  else
+    # User typed a domain name directly
+    TARGET_DOMAIN="$USER_INPUT_DOMAIN"
   fi
 fi
 
 # Clean whitespace
 TARGET_DOMAIN=$(echo "$TARGET_DOMAIN" | xargs)
+
+# Validation: Domain must contain at least one dot
+if [[ "$TARGET_DOMAIN" != *"."* ]]; then
+  echo -e "${RED}[ERROR] '$TARGET_DOMAIN' is not a valid domain name (must contain a dot, e.g. domain.com).${NC}"
+  if [ -n "$PUBLIC_IP" ]; then
+    echo -e "${YELLOW}Falling back to your Free Static IP Domain: ${PUBLIC_IP}.sslip.io${NC}"
+    TARGET_DOMAIN="${PUBLIC_IP}.sslip.io"
+  else
+    exit 1
+  fi
+fi
 
 echo -e ""
 echo -e "${GREEN}[1/4] Preparing SSL configuration for: ${YELLOW}${TARGET_DOMAIN}${NC}"
@@ -91,7 +112,6 @@ systemctl reload nginx
 # 6. Run Certbot to acquire SSL and configure HTTPS in Nginx
 echo -e "${GREEN}[4/4] Requesting Let's Encrypt SSL certificate for ${TARGET_DOMAIN}...${NC}"
 
-# Check if email is available or register without email
 certbot --nginx -d "$TARGET_DOMAIN" \
   --non-interactive \
   --agree-tos \
