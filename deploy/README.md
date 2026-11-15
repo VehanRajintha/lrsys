@@ -31,8 +31,8 @@ In your VPS terminal, run:
 
 ```bash
 # Clone your repository
-git clone https://github.com/VehanRajintha/lrssys.git
-cd lrssys
+git clone https://github.com/VehanRajintha/lrsys.git
+cd lrsys
 
 # Create your .env.local with your keys
 nano .env.local
@@ -76,8 +76,18 @@ bash deploy/update.sh
 ```
 
 ### Enable Free SSL / HTTPS (Let's Encrypt)
-Once you point your domain (e.g. `cusdec.yourdomain.com`) to your VPS IP:
+
+#### Option A: If you have a custom domain (e.g. `cusdec.yourdomain.com`)
+1. In your domain registrar (GoDaddy, Namecheap, Cloudflare, Route53, etc.), create an **A Record** pointing your domain/subdomain to your AWS Lightsail Static IP.
+2. In your VPS terminal, run:
 ```bash
-sudo certbot --nginx -d cusdec.yourdomain.com
+sudo bash deploy/setup-ssl.sh cusdec.yourdomain.com
 ```
-Certbot will configure SSL automatically and auto-renew it forever.
+
+#### Option B: If you only have your Lightsail Static IP (No domain purchased)
+You can get instant free trusted SSL using your static IP through `sslip.io` (a free DNS resolver for IP addresses):
+```bash
+sudo bash deploy/setup-ssl.sh
+```
+The script will auto-detect your static IP (e.g. `13.235.x.x`), generate an SSL certificate for `13.235.x.x.sslip.io`, and configure HTTPS automatically!
+Certbot will auto-renew the certificate before expiration.
