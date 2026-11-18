@@ -114,7 +114,7 @@ import { StatisticsAnalyticsDeck } from '@/components/StatisticsAnalyticsDeck';
 import { DefaultUserAvatar } from '@/components/ui/avatar';
 import { FullScreenChatDeck } from '@/components/FullScreenChatDeck';
 import { DeclarationCalendarBar } from '@/components/DeclarationCalendarBar';
-import { parseRecordDate, formatLongDateDisplay } from '@/lib/dateUtils';
+import { parseRecordDate, formatLongDateDisplay, formatShortDateDisplay, formatDateDisplay, getTodayIso } from '@/lib/dateUtils';
 
 export interface WorkerStreamState {
   id: number;
@@ -382,6 +382,63 @@ export default function LrsysPortal() {
       accuracyRate: parseFloat(accuracyRate)
     };
   }, [records, duplicateIdSet]);
+
+  // Active scope statistics for the Declarations & Audit Ledger tab
+  // Dynamically recalculates based on selected day (e.g. Nov 16, 17, 18) or Today
+  const displayStats = useMemo(() => {
+    const todayIso = getTodayIso();
+    const effectiveDate = selectedDate;
+
+    if (effectiveDate) {
+      const dayRecords = records.filter(r => parseRecordDate(r, 'created') === effectiveDate);
+      const total = dayRecords.length;
+      const verified = dayRecords.filter(r => r.status === 'VERIFIED').length;
+      const corrected = dayRecords.filter(r => r.status === 'CORRECTED').length;
+      const needsReview = dayRecords.filter(r => r.status === 'NEEDS_REVIEW').length;
+      const totalValid = verified + corrected;
+      const accuracyRate = total > 0 ? (((totalValid) / total) * 100).toFixed(1) : '100.0';
+      const isToday = effectiveDate === todayIso;
+
+      return {
+        total,
+        verified: totalValid,
+        needsReview,
+        accuracyRate: parseFloat(accuracyRate),
+        scopeLabel: isToday ? 'TODAY' : formatShortDateDisplay(effectiveDate).toUpperCase(),
+        totalSubtitle: isToday ? 'Ingested today in port ledger' : `Ingested on ${formatDateDisplay(effectiveDate)}`,
+        isFiltered: true
+      };
+    }
+
+    // Default when no specific date is selected ("All Days")
+    const total = records.length;
+    const verified = records.filter(r => r.status === 'VERIFIED').length;
+    const corrected = records.filter(r => r.status === 'CORRECTED').length;
+    const needsReview = records.filter(r => r.status === 'NEEDS_REVIEW').length;
+    const totalValid = verified + corrected;
+    const accuracyRate = total > 0 ? (((totalValid) / total) * 100).toFixed(1) : '100.0';
+
+    return {
+      total,
+      verified: totalValid,
+      needsReview,
+      accuracyRate: parseFloat(accuracyRate),
+      scopeLabel: 'ALL DAYS',
+      totalSubtitle: 'All-time port ledger entries',
+      isFiltered: false
+    };
+  }, [records, selectedDate]);
+
+  // Auto-select Today on initial load if declarations were uploaded today
+  useEffect(() => {
+    if (!selectedDate && records.length > 0) {
+      const todayIso = getTodayIso();
+      const hasToday = records.some(r => parseRecordDate(r, 'created') === todayIso);
+      if (hasToday) {
+        setSelectedDate(todayIso);
+      }
+    }
+  }, [records]);
 
   // Remove all duplicate records from database & cache
   const handleRemoveDuplicates = () => {
@@ -3113,15 +3170,21 @@ export default function LrsysPortal() {
                       <div className="w-9 h-9 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 dark:border dark:border-cyan-500/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400 dark:shadow-[0_0_12px_rgba(6,182,212,0.2)]">
                         <FileText className="w-4 h-4" />
                       </div>
-                      <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400 dark:text-slate-400">TOTAL DECLARATIONS</span>
+                      <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400 dark:text-slate-400">
+                        {selectedDate ? (selectedDate === getTodayIso() ? 'TODAY DECLARATIONS' : `${formatShortDateDisplay(selectedDate).toUpperCase()} DECLARATIONS`) : 'TOTAL DECLARATIONS'}
+                      </span>
                     </div>
 
                     <div className="mt-4">
                       <div className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                        {ledgerStats.total}
+                        {displayStats.total}
                       </div>
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">Total Declarations</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Ingested in port ledger</p>
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">
+                        {selectedDate ? (selectedDate === getTodayIso() ? "Today's Declarations" : `${formatShortDateDisplay(selectedDate)} Declarations`) : 'Total Declarations'}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {displayStats.totalSubtitle}
+                      </p>
                     </div>
                   </div>
 
@@ -3136,7 +3199,7 @@ export default function LrsysPortal() {
 
                     <div className="mt-4">
                       <div className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 tracking-tight">
-                        {ledgerStats.verified + ledgerStats.corrected}
+                        {displayStats.verified}
                       </div>
                       <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">Verified Documents</p>
                       <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Ready for port clearance</p>
@@ -3153,8 +3216,8 @@ export default function LrsysPortal() {
                     </div>
 
                     <div className="mt-4">
-                      <div className={`text-3xl font-extrabold tracking-tight ${ledgerStats.needsReview > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>
-                        {ledgerStats.needsReview}
+                      <div className={`text-3xl font-extrabold tracking-tight ${displayStats.needsReview > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>
+                        {displayStats.needsReview}
                       </div>
                       <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">Needs Review</p>
                       <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Flagged for manual inspection</p>
@@ -3172,7 +3235,7 @@ export default function LrsysPortal() {
 
                     <div className="mt-4">
                       <div className="text-3xl font-extrabold text-sky-600 dark:text-sky-400 tracking-tight">
-                        {ledgerStats.accuracyRate}%
+                        {displayStats.accuracyRate}%
                       </div>
                       <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">Extraction Accuracy</p>
                       <p className="text-[11px] text-sky-600 dark:text-sky-400 font-medium">Multi-pass OCR confidence</p>
@@ -3236,7 +3299,7 @@ export default function LrsysPortal() {
                       <FileText className="w-3.5 h-3.5" />
                       <span>All Declarations</span>
                       <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${filter === 'ALL' ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
-                        {records.length}
+                        {displayStats.total}
                       </span>
                     </button>
 
@@ -3251,7 +3314,7 @@ export default function LrsysPortal() {
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Verified Documents</span>
                       <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${filter === 'VERIFIED' ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
-                        {ledgerStats.verified + ledgerStats.corrected}
+                        {displayStats.verified}
                       </span>
                     </button>
 
@@ -3266,7 +3329,7 @@ export default function LrsysPortal() {
                       <AlertTriangle className="w-3.5 h-3.5" />
                       <span>Needs Review</span>
                       <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${filter === 'NEEDS_REVIEW' ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
-                        {ledgerStats.needsReview}
+                        {displayStats.needsReview}
                       </span>
                     </button>
 
