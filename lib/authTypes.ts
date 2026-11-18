@@ -1,4 +1,4 @@
-export type UserRole = 'DEV' | 'IC' | 'APPRAISER' | 'DDC' | 'LRS';
+export type UserRole = 'DEV' | 'IC' | 'APPRAISER' | 'DDC' | 'LRS' | 'ASC' | 'DC';
 
 export interface AppUser {
   id: string;
@@ -77,6 +77,18 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badgeClass: 'bg-teal-500/15 text-teal-400 border-teal-500/30 shadow-[0_0_12px_rgba(20,184,166,0.25)]',
     borderClass: 'border-teal-500/40',
     description: 'Long Room Supervisor: customs clearance supervision, manifest tally reconciliation, and ledger administration.'
+  },
+  ASC: {
+    label: 'Assistant Superintendent (ASC)',
+    badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/30 shadow-[0_0_12px_rgba(59,130,246,0.25)]',
+    borderClass: 'border-blue-500/40',
+    description: 'Assistant Superintendent of Customs: operational cargo examination, document verification, and clearance valuation.'
+  },
+  DC: {
+    label: 'Director of Customs (DC)',
+    badgeClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30 shadow-[0_0_12px_rgba(244,63,94,0.25)]',
+    borderClass: 'border-rose-500/40',
+    description: 'Director of Customs: high-level clearance authorization, departmental oversight, and customs administration.'
   }
 };
 

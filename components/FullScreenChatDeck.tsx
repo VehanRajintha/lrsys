@@ -38,6 +38,8 @@ import {
   MessageSquareDot,
   Star,
   CircleUserRound,
+  ShieldCheck,
+  Building2,
   CircleOff,
   Users,
   MessageSquareDashed,
@@ -1040,6 +1042,9 @@ export function FullScreenChatDeck({
     if (roleFilter === 'UNREAD') return matchesSearch && c.unreadCount > 0;
     if (roleFilter === 'APPRAISER') return matchesSearch && c.partnerRole.includes('APPRAISER');
     if (roleFilter === 'IC') return matchesSearch && c.partnerRole === 'IC';
+    if (roleFilter === 'ASC') return matchesSearch && c.partnerRole === 'ASC';
+    if (roleFilter === 'DC') return matchesSearch && c.partnerRole === 'DC';
+    if (roleFilter === 'LRS') return matchesSearch && c.partnerRole === 'LRS';
     return matchesSearch;
   });
 
@@ -1114,6 +1119,15 @@ export function FullScreenChatDeck({
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setRoleFilter('IC')} className={roleFilter === 'IC' ? 'font-bold text-cyan-600' : ''}>
                       <CircleUserRound className="mr-2 w-4 h-4 text-sky-500" /> IC Officers
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoleFilter('ASC')} className={roleFilter === 'ASC' ? 'font-bold text-cyan-600' : ''}>
+                      <ShieldCheck className="mr-2 w-4 h-4 text-blue-500" /> ASC Officers
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoleFilter('DC')} className={roleFilter === 'DC' ? 'font-bold text-cyan-600' : ''}>
+                      <Building2 className="mr-2 w-4 h-4 text-rose-500" /> DC Directors
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoleFilter('LRS')} className={roleFilter === 'LRS' ? 'font-bold text-cyan-600' : ''}>
+                      <FileSpreadsheet className="mr-2 w-4 h-4 text-teal-500" /> LRS Officers
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

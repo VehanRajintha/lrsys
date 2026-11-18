@@ -51,8 +51,42 @@ function writeJsonFile<T>(filePath: string, data: T): void {
   }
 }
 
+const HISTORICAL_SEED_FILE = path.join(process.cwd(), 'scripts', 'historical_records_nov16_nov17.json');
+
+function ensureHistoricalRecords(existing: CusDecRecord[]): CusDecRecord[] {
+  if (!fs.existsSync(HISTORICAL_SEED_FILE)) return existing;
+  try {
+    const raw = fs.readFileSync(HISTORICAL_SEED_FILE, 'utf8');
+    const historical: CusDecRecord[] = JSON.parse(raw);
+    if (!Array.isArray(historical) || historical.length === 0) return existing;
+
+    const existingIds = new Set(existing.map((r) => r.id));
+    const existingRefs = new Set(
+      existing.map((r) => `${r.customsRefNumber || ''}_${r.greenStampNumber || ''}_${(r.createdAt || '').slice(0, 10)}`)
+    );
+
+    let added = 0;
+    for (const r of historical) {
+      const refKey = `${r.customsRefNumber || ''}_${r.greenStampNumber || ''}_${(r.createdAt || '').slice(0, 10)}`;
+      if (!existingIds.has(r.id) && !existingRefs.has(refKey)) {
+        existing.push(r);
+        existingIds.add(r.id);
+        added++;
+      }
+    }
+    if (added > 0) {
+      existing.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      writeJsonFile(RECORDS_FILE, existing);
+      console.log(`[DB Init]: Successfully merged ${added} historical Nov 16/17 records. Total records: ${existing.length}`);
+    }
+  } catch (err: any) {
+    console.warn('[DB Init Historical Sync Warning]:', err.message);
+  }
+  return existing;
+}
+
 // In-memory cache
-let recordsCache: CusDecRecord[] = readJsonFile<CusDecRecord[]>(RECORDS_FILE, []);
+let recordsCache: CusDecRecord[] = ensureHistoricalRecords(readJsonFile<CusDecRecord[]>(RECORDS_FILE, []));
 let settingsCache: Settings = { ...DEFAULT_SETTINGS, ...readJsonFile<Partial<Settings>>(SETTINGS_FILE, {}) };
 
 // Supabase sync tracking

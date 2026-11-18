@@ -3,7 +3,7 @@ import { getServerSession } from '@/lib/auth';
 import { updateUser, deleteUser } from '@/lib/userDb';
 import { UserRole } from '@/lib/authTypes';
 
-const ALLOWED_ROLES: UserRole[] = ['DEV', 'IC', 'APPRAISER', 'DDC', 'LRS'];
+const ALLOWED_ROLES: UserRole[] = ['DEV', 'IC', 'APPRAISER', 'DDC', 'LRS', 'ASC', 'DC'];
 
 export async function PATCH(
   req: NextRequest,

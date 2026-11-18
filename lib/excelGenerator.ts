@@ -13,7 +13,7 @@ import { CusDecRecord } from './types';
  * @param records - Array of extracted CusDec declarations
  * @returns Buffer of the generated .xlsx workbook
  */
-export async function generateCusDecExcel(records: CusDecRecord[]): Promise<Buffer> {
+export async function generateCusDecExcel(records: CusDecRecord[], dateLabel?: string): Promise<Buffer> {
   // Sort records strictly by Counter Stamp (000xxxx) in ASCENDING ORDER
   const sortedRecords = [...records].sort((a, b) => {
     const numA = parseInt(String(a.greenStampNumber || '').replace(/\D/g, ''), 10) || 0;
@@ -49,7 +49,8 @@ export async function generateCusDecExcel(records: CusDecRecord[]): Promise<Buff
   // Metadata Sub-banner
   worksheet.mergeCells('A2:F2');
   const metaCell = worksheet.getCell('A2');
-  metaCell.value = `Exported: ${new Date().toLocaleDateString('en-GB')}  |  Total Entries: ${sortedRecords.length}  |  Order: Counter Stamp (Ascending)`;
+  const dateInfo = dateLabel ? `Target Day: ${dateLabel}  |  ` : '';
+  metaCell.value = `${dateInfo}Exported: ${new Date().toLocaleDateString('en-GB')}  |  Total Entries: ${sortedRecords.length}  |  Order: Counter Stamp (Ascending)`;
   metaCell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FFE2E8F0' } };
   metaCell.fill = {
     type: 'pattern',

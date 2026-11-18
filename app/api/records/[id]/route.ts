@@ -25,9 +25,10 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized: Session required.' }, { status: 401 });
   }
   const role = session.role;
-  if (role !== 'LRS' && role !== 'IC' && role !== 'DEV') {
+  const CAN_MANAGE_ROLES = ['LRS', 'IC', 'APPRAISER', 'ASC', 'DC', 'DEV'];
+  if (!CAN_MANAGE_ROLES.includes(role)) {
     return NextResponse.json(
-      { error: 'Forbidden: Declaration editing is restricted to LRS & IC clearance.' },
+      { error: 'Forbidden: Declaration editing is restricted to authorized customs clearance.' },
       { status: 403 }
     );
   }
@@ -50,9 +51,10 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized: Session required.' }, { status: 401 });
   }
   const role = session.role;
-  if (role !== 'LRS' && role !== 'IC' && role !== 'DEV') {
+  const CAN_MANAGE_ROLES = ['LRS', 'IC', 'APPRAISER', 'ASC', 'DC', 'DEV'];
+  if (!CAN_MANAGE_ROLES.includes(role)) {
     return NextResponse.json(
-      { error: 'Forbidden: Deleting declarations is restricted to LRS & IC clearance.' },
+      { error: 'Forbidden: Deleting declarations is restricted to authorized customs clearance.' },
       { status: 403 }
     );
   }

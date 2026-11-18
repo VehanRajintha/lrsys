@@ -108,6 +108,16 @@ const ROLE_AVATARS: Record<UserRole, { gradient: string; initials: string; ringC
     gradient: 'from-teal-500 via-emerald-600 to-blue-600',
     initials: 'LR',
     ringColor: 'ring-teal-500'
+  },
+  ASC: {
+    gradient: 'from-blue-600 via-indigo-600 to-cyan-600',
+    initials: 'AS',
+    ringColor: 'ring-blue-500'
+  },
+  DC: {
+    gradient: 'from-rose-600 via-red-600 to-pink-600',
+    initials: 'DC',
+    ringColor: 'ring-rose-500'
   }
 };
 

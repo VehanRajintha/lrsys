@@ -214,7 +214,7 @@ export function DevConsoleModal({ isOpen, onClose, currentUser }: DevConsoleModa
                   </Badge>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Manage role credentials (IC, Appraiser, DDC, LRS, DEV) and infrastructure gateways.
+                  Manage role credentials (IC, Appraiser, DDC, LRS, ASC, DC, DEV) and infrastructure gateways.
                 </DialogDescription>
               </div>
             </div>
@@ -479,8 +479,8 @@ export function DevConsoleModal({ isOpen, onClose, currentUser }: DevConsoleModa
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-1">
-                    {(['DEV', 'IC', 'APPRAISER', 'DDC', 'LRS'] as UserRole[]).map((r) => {
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 pt-1">
+                    {(['DEV', 'IC', 'APPRAISER', 'DDC', 'LRS', 'ASC', 'DC'] as UserRole[]).map((r) => {
                       const cfg = ROLE_CONFIGS[r];
                       return (
                         <div key={r} className="p-2.5 rounded-lg border bg-muted/40 space-y-1">
@@ -563,6 +563,8 @@ export function DevConsoleModal({ isOpen, onClose, currentUser }: DevConsoleModa
                     >
                       <option value="APPRAISER">Appraiser</option>
                       <option value="IC">IC (Image Check)</option>
+                      <option value="ASC">ASC (Assistant Superintendent)</option>
+                      <option value="DC">DC (Director of Customs)</option>
                       <option value="DDC">DDC (Deputy Director)</option>
                       <option value="LRS">LRS (Long Room)</option>
                       <option value="DEV">DEV (Administrator)</option>

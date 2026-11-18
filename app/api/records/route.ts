@@ -46,9 +46,10 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized: Session required.' }, { status: 401 });
   }
   const role = session.role;
-  if (role !== 'LRS' && role !== 'IC' && role !== 'DEV') {
+  const CAN_MANAGE_ROLES = ['LRS', 'IC', 'APPRAISER', 'ASC', 'DC', 'DEV'];
+  if (!CAN_MANAGE_ROLES.includes(role)) {
     return NextResponse.json(
-      { error: 'Forbidden: Clearing ledger is restricted to LRS & IC clearance.' },
+      { error: 'Forbidden: Clearing ledger is restricted to authorized customs clearance.' },
       { status: 403 }
     );
   }
