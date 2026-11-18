@@ -3381,16 +3381,24 @@ export default function LrsysPortal() {
                     {/* Table Toolbar Actions */}
                     <div className="flex flex-wrap items-center gap-2">
                       <Button variant="outline" size="sm" asChild className="gap-1.5 h-9 rounded-lg border-slate-200 dark:border-slate-800 dark:bg-[#070b14]/60 dark:hover:bg-slate-800 dark:text-slate-300 text-xs">
-                        <a href="/api/export/excel" download>
+                        <a
+                          href={selectedDate ? `/api/export/excel?date=${encodeURIComponent(selectedDate)}` : '/api/export/excel'}
+                          download
+                          title={selectedDate ? `Export Excel for ${formatLongDateDisplay(selectedDate)}` : 'Export all declarations to Excel'}
+                        >
                           <Download className="w-3.5 h-3.5 text-emerald-500" />
-                          <span>Export Excel</span>
+                          <span>Export Excel{selectedDate ? ` (${filteredRecords.length})` : ''}</span>
                         </a>
                       </Button>
 
                       <Button variant="outline" size="sm" asChild className="gap-1.5 h-9 rounded-lg border-slate-200 dark:border-slate-800 dark:bg-[#070b14]/60 dark:hover:bg-slate-800 dark:text-slate-300 text-xs">
-                        <a href="/api/export/csv" download>
+                        <a
+                          href={selectedDate ? `/api/export/csv?date=${encodeURIComponent(selectedDate)}` : '/api/export/csv'}
+                          download
+                          title={selectedDate ? `Export CSV for ${formatLongDateDisplay(selectedDate)}` : 'Export all declarations to CSV'}
+                        >
                           <Download className="w-3.5 h-3.5 text-sky-500" />
-                          <span>Export CSV</span>
+                          <span>Export CSV{selectedDate ? ` (${filteredRecords.length})` : ''}</span>
                         </a>
                       </Button>
 
