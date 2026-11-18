@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS public.app_users (
   email TEXT UNIQUE NOT NULL,
   username TEXT UNIQUE NOT NULL,
   full_name TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'IC' CHECK (role IN ('DEV', 'IC', 'APPRAISER', 'DDC', 'LRS')),
+  role TEXT NOT NULL DEFAULT 'IC' CHECK (role IN ('DEV', 'IC', 'APPRAISER', 'DDC', 'LRS', 'ASC', 'DC')),
   password_hash TEXT NOT NULL,
   salt TEXT NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,

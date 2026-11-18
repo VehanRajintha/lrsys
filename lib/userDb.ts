@@ -39,7 +39,7 @@ function writeJson<T>(filePath: string, data: T): void {
 }
 
 /**
- * Default Seed Users for all 5 roles
+ * Default Seed Users for all 7 roles
  */
 function createSeedUsers(): AppUser[] {
   const now = new Date().toISOString();
@@ -49,6 +49,8 @@ function createSeedUsers(): AppUser[] {
   const appraiserCred = hashPassword('Appraiser@LRSYS2026!');
   const ddcCred = hashPassword('Ddc@LRSYS2026!');
   const lrsCred = hashPassword('Lrs@LRSYS2026!');
+  const ascCred = hashPassword('Asc@LRSYS2026!');
+  const dcCred = hashPassword('Dc@LRSYS2026!');
 
   return [
     {
@@ -110,6 +112,30 @@ function createSeedUsers(): AppUser[] {
       isActive: true,
       createdAt: now,
       updatedAt: now
+    },
+    {
+      id: 'usr-asc-01',
+      email: 'asc@lrsys.gov.lk',
+      username: 'asc_officer',
+      fullName: 'Assistant Superintendent of Customs (ASC)',
+      role: 'ASC',
+      passwordHash: ascCred.hash,
+      salt: ascCred.salt,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: 'usr-dc-01',
+      email: 'dc@lrsys.gov.lk',
+      username: 'dc_director',
+      fullName: 'Director of Customs (DC)',
+      role: 'DC',
+      passwordHash: dcCred.hash,
+      salt: dcCred.salt,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
     }
   ];
 }
@@ -130,10 +156,41 @@ let usersCache: AppUser[] = readJson<AppUser[]>(USERS_FILE, []).map((u) => ({
 }));
 let otpsCache: PasswordOtpRecord[] = readJson<PasswordOtpRecord[]>(OTPS_FILE, []);
 
+function ensureSeedUsers(current: AppUser[]): AppUser[] {
+  const seedUsers = createSeedUsers();
+  let modified = false;
+  for (const seed of seedUsers) {
+    if (!current.some((u) => u.role === seed.role || u.id === seed.id || u.username === seed.username)) {
+      current.push(seed);
+      modified = true;
+    }
+  }
+  if (modified) {
+    writeJson(USERS_FILE, current);
+    console.log('[User DB]: Synchronized all role-based seed accounts in data/users.json');
+  }
+  return current;
+}
+
+export function refreshCacheFromDisk(): AppUser[] {
+  const diskUsers = readJson<AppUser[]>(USERS_FILE, []);
+  if (diskUsers.length > 0) {
+    usersCache = ensureSeedUsers(diskUsers.map((u) => ({
+      ...u,
+      avatarUrl: getOfficerAvatar(u.id, u.role, u.avatarUrl) || undefined,
+    })));
+  } else {
+    usersCache = ensureSeedUsers(usersCache);
+  }
+  return usersCache;
+}
+
 if (usersCache.length === 0) {
   usersCache = createSeedUsers();
   writeJson(USERS_FILE, usersCache);
-  console.log('[User DB]: Initialized 5 role-based seed accounts in data/users.json');
+  console.log('[User DB]: Initialized 7 role-based seed accounts in data/users.json');
+} else {
+  usersCache = ensureSeedUsers(usersCache);
 }
 
 export function toSafeUser(user: AppUser): SafeUser {
@@ -206,6 +263,7 @@ export async function syncUsersWithSupabase(): Promise<void> {
  */
 export async function findUserByIdentifier(identifier: string): Promise<AppUser | null> {
   const clean = identifier.trim().toLowerCase();
+  refreshCacheFromDisk();
   
   if (isSupabaseConfigured()) {
     const supabase = getSupabase();
@@ -214,7 +272,7 @@ export async function findUserByIdentifier(identifier: string): Promise<AppUser 
         const { data, error } = await supabase
           .from('app_users')
           .select('*')
-          .or(`email.ilike.${clean},username.ilike.${clean}`)
+          .or(`email.ilike.${clean},username.ilike.${clean},role.ilike.${clean}`)
           .limit(1)
           .single();
 
@@ -244,6 +302,8 @@ export async function findUserByIdentifier(identifier: string): Promise<AppUser 
 
   const found = usersCache.find(
     u => u.username.toLowerCase() === clean || u.email.toLowerCase() === clean
+  ) || usersCache.find(
+    u => u.role.toLowerCase() === clean
   );
   return found || null;
 }
@@ -252,6 +312,7 @@ export async function findUserByIdentifier(identifier: string): Promise<AppUser 
  * Find user by ID
  */
 export async function findUserById(id: string): Promise<AppUser | null> {
+  refreshCacheFromDisk();
   const found = usersCache.find(u => u.id === id);
   if (found) return found;
 
@@ -288,6 +349,7 @@ export async function findUserById(id: string): Promise<AppUser | null> {
  * Get all users as SafeUser (no hashes)
  */
 export async function getAllUsers(): Promise<SafeUser[]> {
+  refreshCacheFromDisk();
   await syncUsersWithSupabase();
   return usersCache.map(toSafeUser);
 }

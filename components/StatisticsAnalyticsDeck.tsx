@@ -223,7 +223,7 @@ function StatisticsAnalyticsSkeleton() {
       </Card>
 
       {/* 3. Top 5 Metric Cards Skeleton */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i} className="rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-5 shadow-sm flex flex-col justify-between">
             <div className="flex items-center justify-between">
@@ -915,30 +915,30 @@ export function StatisticsAnalyticsDeck({
       {/* ========================================================
            HERO BANNER: STATISTICS & DAILY VOLUME TERMINAL
            ======================================================== */}
-      <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] border border-slate-200/90 dark:border-cyan-500/20 p-6 sm:p-8 shadow-[0_12px_40px_-15px_rgba(14,165,233,0.12)] dark:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85),0_0_35px_-10px_rgba(14,165,233,0.15)]">
+      <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] border border-slate-200/90 dark:border-cyan-500/20 p-4 sm:p-8 shadow-[0_12px_40px_-15px_rgba(14,165,233,0.12)] dark:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85),0_0_35px_-10px_rgba(14,165,233,0.15)]">
         {/* Ambient Cyber Mesh Glow */}
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-cyan-500/10 dark:bg-cyan-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-blue-600/10 dark:bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-24 -right-24 w-72 sm:w-96 h-72 sm:h-96 bg-cyan-500/10 dark:bg-cyan-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-60 sm:w-80 h-60 sm:h-80 bg-blue-600/10 dark:bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 sm:gap-6">
+          <div className="space-y-1.5 sm:space-y-2 max-w-2xl">
+            <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
               CusDec Entry Velocity &amp;{' '}
               <span className="bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 bg-clip-text text-transparent">
                 Growth Telemetry
               </span>
             </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
               Real-time customs declarations entry volume, cumulative intake trajectory curves, month-over-month growth analytics, and period-over-period comparative telemetry.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
               onClick={handleExportCSV}
-              className="h-10 px-4 gap-2 rounded-xl border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/70 text-xs font-semibold cursor-pointer shadow-xs"
+              className="h-9 sm:h-10 px-3.5 sm:px-4 gap-2 rounded-xl border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/70 text-xs font-semibold cursor-pointer shadow-xs w-full sm:w-auto justify-center"
             >
               <Download className="w-4 h-4 text-cyan-500" />
               <span>Export CSV</span>
@@ -959,7 +959,7 @@ export function StatisticsAnalyticsDeck({
                 <CalendarDays className="w-4 h-4 text-cyan-500" />
                 <span>Timeframe:</span>
               </div>
-              <div className="relative flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-inner">
+              <div className="relative flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-inner overflow-x-auto no-scrollbar max-w-full">
                 {/* Smooth Gliding Active Pill Indicator */}
                 {timeframePillStyle && (
                   <div
@@ -1077,22 +1077,22 @@ export function StatisticsAnalyticsDeck({
       {/* ========================================================
            5 KEY TELEMETRY PERFORMANCE CARDS
            ======================================================== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         {/* Metric 1: Total Declarations Ingested */}
-        <Card className="rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-5 shadow-sm hover:border-cyan-500/40 transition-all">
+        <Card className="col-span-1 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-3.5 sm:p-5 shadow-sm hover:border-cyan-500/40 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wide uppercase truncate">
               Total CusDec Volume
             </span>
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-500">
-              <FileText className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-500 shrink-0">
+              <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900 dark:text-white">
+          <div className="mt-2.5 sm:mt-3 flex items-baseline gap-1.5 sm:gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
               {metrics.total}
             </span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">declarations</span>
+            <span className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">docs</span>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-xs">
             {metrics.totalDelta >= 0 ? (
@@ -1113,20 +1113,20 @@ export function StatisticsAnalyticsDeck({
         </Card>
 
         {/* Metric 2: Monthly Increment / Decrement Status */}
-        <Card className="rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-5 shadow-sm hover:border-emerald-500/40 transition-all">
+        <Card className="col-span-1 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-3.5 sm:p-5 shadow-sm hover:border-emerald-500/40 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
-              Monthly Increment
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wide uppercase truncate">
+              Monthly Growth
             </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
-              <TrendingUp className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+              <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">
+          <div className="mt-2.5 sm:mt-3 flex items-baseline gap-1.5 sm:gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">
               {metrics.latestMonth ? `+${metrics.latestMonth.deltaPct}%` : '+0.0%'}
             </span>
-            <span className="text-xs font-bold text-emerald-500/80">MoM growth</span>
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-500/80 truncate">MoM</span>
           </div>
           <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
             {metrics.latestMonth ? `+${metrics.latestMonth.deltaDocs} docs over previous month` : 'Baseline month'}
@@ -1134,20 +1134,20 @@ export function StatisticsAnalyticsDeck({
         </Card>
 
         {/* Metric 3: Daily Ingestion Rate */}
-        <Card className="rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-5 shadow-sm hover:border-sky-500/40 transition-all">
+        <Card className="col-span-1 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-3.5 sm:p-5 shadow-sm hover:border-sky-500/40 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
-              Daily Ingestion Rate
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wide uppercase truncate">
+              Daily Ingestion
             </span>
-            <div className="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-500">
-              <Activity className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-500 shrink-0">
+              <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-sky-600 dark:text-sky-400">
+          <div className="mt-2.5 sm:mt-3 flex items-baseline gap-1.5 sm:gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-sky-600 dark:text-sky-400">
               ~{metrics.avgDailyVolume}
             </span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">docs/day</span>
+            <span className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">/day</span>
           </div>
           <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
             Across {metrics.activeDaysCount} active intake days
@@ -1155,20 +1155,20 @@ export function StatisticsAnalyticsDeck({
         </Card>
 
         {/* Metric 4: Peak Ingestion Velocity */}
-        <Card className="rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-5 shadow-sm hover:border-indigo-500/40 transition-all">
+        <Card className="col-span-1 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-3.5 sm:p-5 shadow-sm hover:border-indigo-500/40 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wide uppercase truncate">
               Peak Day Intake
             </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500">
-              <Zap className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500 shrink-0">
+              <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">
+          <div className="mt-2.5 sm:mt-3 flex items-baseline gap-1.5 sm:gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">
               {metrics.peakDay.total}
             </span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">docs</span>
+            <span className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">docs</span>
           </div>
           <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 truncate">
             {metrics.peakDay.date ? formatDateDisplay(metrics.peakDay.date) : 'N/A'}
@@ -1176,13 +1176,13 @@ export function StatisticsAnalyticsDeck({
         </Card>
 
         {/* Metric 5: Mean OCR Accuracy */}
-        <Card className="rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-5 shadow-sm hover:border-cyan-500/40 transition-all flex flex-col justify-between">
+        <Card className="col-span-2 sm:col-span-2 lg:col-span-1 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] p-3.5 sm:p-5 shadow-sm hover:border-cyan-500/40 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
               Mean OCR Accuracy
             </span>
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-500">
-              <Gauge className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-500">
+              <Gauge className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
@@ -1287,6 +1287,30 @@ export function StatisticsAnalyticsDeck({
                   x: e.clientX - rect.left,
                   y: e.clientY - rect.top,
                 });
+              }}
+              onTouchStart={(e) => {
+                if (e.touches.length > 0) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setLineTooltipPos({
+                    x: e.touches[0].clientX - rect.left,
+                    y: e.touches[0].clientY - rect.top,
+                  });
+                }
+              }}
+              onTouchMove={(e) => {
+                if (e.touches.length > 0) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setLineTooltipPos({
+                    x: e.touches[0].clientX - rect.left,
+                    y: e.touches[0].clientY - rect.top,
+                  });
+                }
+              }}
+              onTouchEnd={() => {
+                setTimeout(() => {
+                  setHoveredLinePoint(null);
+                  setLineTooltipPos(null);
+                }, 3000);
               }}
               onMouseLeave={() => {
                 setHoveredLinePoint(null);
@@ -1659,6 +1683,30 @@ export function StatisticsAnalyticsDeck({
                     x: e.clientX - rect.left,
                     y: e.clientY - rect.top,
                   });
+                }}
+                onTouchStart={(e) => {
+                  if (e.touches.length > 0) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setBarTooltipPos({
+                      x: e.touches[0].clientX - rect.left,
+                      y: e.touches[0].clientY - rect.top,
+                    });
+                  }
+                }}
+                onTouchMove={(e) => {
+                  if (e.touches.length > 0) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setBarTooltipPos({
+                      x: e.touches[0].clientX - rect.left,
+                      y: e.touches[0].clientY - rect.top,
+                    });
+                  }
+                }}
+                onTouchEnd={() => {
+                  setTimeout(() => {
+                    setHoveredBarData(null);
+                    setBarTooltipPos(null);
+                  }, 3000);
                 }}
                 onMouseLeave={() => {
                   setHoveredBarData(null);
@@ -2365,7 +2413,58 @@ export function StatisticsAnalyticsDeck({
         </CardHeader>
 
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          {/* Mobile Card Feed for Small Screens */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+            {dailyData.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-400">
+                No records found in this date timeframe.
+              </div>
+            ) : (
+              dailyData.map((day) => {
+                const intensityPct = Math.round((day.total / (metrics.peakDay.total || 1)) * 100);
+                return (
+                  <div key={day.date} className="p-4 space-y-2.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-slate-900 dark:text-white">
+                        {formatDateDisplay(day.date)}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="font-mono text-xs bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20 font-bold">
+                          {day.total} docs
+                        </Badge>
+                        <span
+                          className={cn(
+                            'text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md',
+                            day.dayDelta >= 0
+                              ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+                              : 'text-rose-600 dark:text-rose-400 bg-rose-500/10'
+                          )}
+                        >
+                          {day.dayDelta >= 0 ? `+${day.dayDelta}` : day.dayDelta}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                      <span>Cumulative: <strong className="text-slate-700 dark:text-slate-300 font-mono">{day.cumulative} docs</strong></span>
+                      <span>Accuracy: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{day.avgConfidence}%</strong></span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                        <span>Intake Intensity</span>
+                        <span className="font-mono font-semibold">{intensityPct}%</span>
+                      </div>
+                      <Progress value={intensityPct} className="h-1.5" />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="overflow-x-auto hidden md:block">
             <Table>
               <TableHeader className="bg-slate-50/80 dark:bg-slate-900/60">
                 <TableRow className="border-b border-slate-100 dark:border-slate-800">

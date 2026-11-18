@@ -38,6 +38,8 @@ import {
   MessageSquareDot,
   Star,
   CircleUserRound,
+  ShieldCheck,
+  Building2,
   CircleOff,
   Users,
   MessageSquareDashed,
@@ -1040,11 +1042,14 @@ export function FullScreenChatDeck({
     if (roleFilter === 'UNREAD') return matchesSearch && c.unreadCount > 0;
     if (roleFilter === 'APPRAISER') return matchesSearch && c.partnerRole.includes('APPRAISER');
     if (roleFilter === 'IC') return matchesSearch && c.partnerRole === 'IC';
+    if (roleFilter === 'ASC') return matchesSearch && c.partnerRole === 'ASC';
+    if (roleFilter === 'DC') return matchesSearch && c.partnerRole === 'DC';
+    if (roleFilter === 'LRS') return matchesSearch && c.partnerRole === 'LRS';
     return matchesSearch;
   });
 
   return (
-    <div className="w-full h-[calc(100vh-5.5rem)] flex flex-col bg-white dark:bg-[#070b14] overflow-hidden select-none">
+    <div className="w-full h-[calc(100dvh-4rem)] sm:h-[calc(100vh-5.5rem)] flex flex-col bg-white dark:bg-[#070b14] overflow-hidden select-none">
       {/* Hidden File Inputs */}
       <input
         type="file"
@@ -1082,7 +1087,12 @@ export function FullScreenChatDeck({
         {/* ========================================================
              LEFT PANEL: CHATS INBOX & OFFICERS DIRECTORY
              ======================================================== */}
-        <ResizablePanel defaultSize={28} minSize={22} maxSize={40} className="flex-grow">
+        <ResizablePanel
+          defaultSize={28}
+          minSize={22}
+          maxSize={40}
+          className={cn("flex-grow", activePartner && "hidden md:block")}
+        >
           <div className="flex flex-col h-full border-r border-slate-200/90 dark:border-slate-800/80 bg-slate-50/50 dark:bg-[#070b14]">
             {/* Top Toolbar */}
             <div className="h-14 px-4 border-b border-slate-200/90 dark:border-slate-800/80 flex items-center justify-between shrink-0 bg-white dark:bg-[#070b14]">
@@ -1114,6 +1124,15 @@ export function FullScreenChatDeck({
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setRoleFilter('IC')} className={roleFilter === 'IC' ? 'font-bold text-cyan-600' : ''}>
                       <CircleUserRound className="mr-2 w-4 h-4 text-sky-500" /> IC Officers
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoleFilter('ASC')} className={roleFilter === 'ASC' ? 'font-bold text-cyan-600' : ''}>
+                      <ShieldCheck className="mr-2 w-4 h-4 text-blue-500" /> ASC Officers
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoleFilter('DC')} className={roleFilter === 'DC' ? 'font-bold text-cyan-600' : ''}>
+                      <Building2 className="mr-2 w-4 h-4 text-rose-500" /> DC Directors
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoleFilter('LRS')} className={roleFilter === 'LRS' ? 'font-bold text-cyan-600' : ''}>
+                      <FileSpreadsheet className="mr-2 w-4 h-4 text-teal-500" /> LRS Officers
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1359,17 +1378,30 @@ export function FullScreenChatDeck({
           </div>
         </ResizablePanel>
 
-        <ResizableHandle withHandle />
+        <ResizableHandle withHandle className="hidden md:flex" />
 
         {/* ========================================================
              RIGHT PANEL: ACTIVE PRIVATE CONVERSATION STREAM & INPUT
              ======================================================== */}
-        <ResizablePanel defaultSize={72} minSize={55}>
+        <ResizablePanel
+          defaultSize={72}
+          minSize={55}
+          className={cn(!activePartner && "hidden md:block", "flex-1 w-full")}
+        >
           {activePartner ? (
             <div className="flex flex-col h-full bg-white dark:bg-[#070b14]">
               {/* Header */}
-              <div className="h-14 border-b border-slate-200/90 dark:border-slate-800/80 flex items-center justify-between px-4 bg-white/95 dark:bg-[#070b14]/95 backdrop-blur-md shrink-0">
-                <div className="flex items-center gap-3">
+              <div className="h-14 border-b border-slate-200/90 dark:border-slate-800/80 flex items-center justify-between px-3 sm:px-4 bg-white/95 dark:bg-[#070b14]/95 backdrop-blur-md shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setActivePartner(null)}
+                    className="md:hidden h-8 w-8 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-xl shrink-0 -ml-1"
+                    title="Back to All Chats"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
                   <div className="relative shrink-0">
                     {activePartner.isGroup ? (
                       <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 flex items-center justify-center text-white ring-2 ring-white dark:ring-slate-800 shadow-md">

@@ -177,8 +177,13 @@ export default function LrsysPortal() {
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
-  // CusDec declarations management permission: LRS and IC (plus DEV superadmin) only
-  const canManageCusDec = currentUser?.role === 'LRS' || currentUser?.role === 'IC' || currentUser?.role === 'DEV';
+  // CusDec declarations management permission: LRS, IC, Appraiser, ASC, DC (plus DEV superadmin)
+  const canManageCusDec = currentUser?.role === 'LRS' || 
+                          currentUser?.role === 'IC' || 
+                          currentUser?.role === 'APPRAISER' || 
+                          currentUser?.role === 'ASC' || 
+                          currentUser?.role === 'DC' || 
+                          currentUser?.role === 'DEV';
 
   // Load authenticated user session
   useEffect(() => {
@@ -381,7 +386,7 @@ export default function LrsysPortal() {
   // Remove all duplicate records from database & cache
   const handleRemoveDuplicates = () => {
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Deduplication is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Deduplication is restricted to authorized customs clearance.');
       return;
     }
     if (duplicateIdSet.size === 0) {
@@ -963,7 +968,7 @@ export default function LrsysPortal() {
   const saveQuickEdit = async () => {
     if (!selectedRecord) return;
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Editing declarations is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Editing declarations is restricted to authorized customs clearance.');
       return;
     }
     const updates = {
@@ -1004,7 +1009,7 @@ export default function LrsysPortal() {
   // -------------------------------------------------------------
   const requestDeleteSingleRecord = (record: CusDecRecord) => {
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Deleting declarations is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Deleting declarations is restricted to authorized customs clearance.');
       return;
     }
     const stampLabel = record.greenStampNumber && record.greenStampNumber !== '000000'
@@ -1049,7 +1054,7 @@ export default function LrsysPortal() {
 
   const deleteSelectedRecords = () => {
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Bulk deletion is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Bulk deletion is restricted to authorized customs clearance.');
       return;
     }
     const ids = Array.from(selectedRowIds);
@@ -1089,7 +1094,7 @@ export default function LrsysPortal() {
 
   const clearAllRecords = () => {
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Clearing the ledger is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Clearing the ledger is restricted to authorized customs clearance.');
       return;
     }
     const recordCount = records.length;
@@ -1125,7 +1130,7 @@ export default function LrsysPortal() {
 
   const reprocessAllWithAI = () => {
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Reprocessing declarations is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Reprocessing declarations is restricted to authorized customs clearance.');
       return;
     }
     setConfirmModal({
@@ -1157,7 +1162,7 @@ export default function LrsysPortal() {
 
   const reprocessUnknownsWithAI = async () => {
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Reprocessing unknown declarations is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Reprocessing unknown declarations is restricted to authorized customs clearance.');
       return;
     }
     try {
@@ -1185,7 +1190,7 @@ export default function LrsysPortal() {
   const processFilesWithRealtimeProgress = async (files: File[]) => {
     if (!files || files.length === 0) return;
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to authorized customs clearance.');
       return;
     }
 
@@ -1431,7 +1436,7 @@ export default function LrsysPortal() {
 
   const handleZipFile = async (zipFile: File) => {
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'ZIP import is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'ZIP import is restricted to authorized customs clearance.');
       return;
     }
     try {
@@ -1470,7 +1475,7 @@ export default function LrsysPortal() {
   const handleFileUpload = async (files: FileList | null, endpoint: string, fieldName: string) => {
     if (!files || files.length === 0) return;
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to authorized customs clearance.');
       return;
     }
 
@@ -1556,7 +1561,7 @@ export default function LrsysPortal() {
     if (isInsideChatWidget(e)) return;
 
     if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to LRS & IC clearance.');
+      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to authorized customs clearance.');
       return;
     }
 
@@ -2714,8 +2719,8 @@ export default function LrsysPortal() {
           className={cn(
             "w-full flex flex-col flex-1",
             activeSection === 'chat'
-              ? "p-0 max-w-none gap-0 h-[calc(100vh-5rem)] overflow-hidden"
-              : "max-w-[1760px] mx-auto p-4 sm:p-6 gap-6"
+              ? "p-0 max-w-none gap-0 h-[calc(100dvh-4rem)] sm:h-[calc(100vh-5rem)] overflow-hidden pb-16 md:pb-0"
+              : "max-w-[1760px] mx-auto p-3 sm:p-6 pb-24 md:pb-6 gap-6"
           )}
         >
           {/* ========================================================
@@ -4266,6 +4271,128 @@ export default function LrsysPortal() {
             </div>
           </footer>
         )}
+
+        {/* ========================================================
+             PREMIUM APPLE-STYLE MOBILE BOTTOM NAVIGATION BAR
+             ======================================================== */}
+        <nav
+          aria-label="Mobile Bottom Navigation"
+          className="fixed bottom-0 left-0 right-0 z-40 md:hidden mobile-bottom-dock pb-safe transition-transform duration-300 select-none"
+        >
+          <div className="grid grid-cols-5 h-16 items-center px-1">
+            {/* 1. Stats Tab */}
+            <button
+              type="button"
+              onClick={() => navigateToSection('stats')}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer active:scale-95",
+                activeSection === 'stats'
+                  ? "text-cyan-600 dark:text-cyan-400 font-extrabold"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              )}
+            >
+              <div className="relative">
+                <BarChart3 className={cn("w-5 h-5 transition-transform duration-200", activeSection === 'stats' && "scale-110 text-cyan-500")} />
+                {activeSection === 'stats' && (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                )}
+              </div>
+              <span className="text-[10px] tracking-tight">Stats</span>
+            </button>
+
+            {/* 2. OCR / Declarations Tab */}
+            <button
+              type="button"
+              onClick={() => navigateToSection('ocr')}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer active:scale-95",
+                activeSection === 'ocr'
+                  ? "text-sky-600 dark:text-sky-400 font-extrabold"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              )}
+            >
+              <div className="relative">
+                <FileText className={cn("w-5 h-5 transition-transform duration-200", activeSection === 'ocr' && "scale-110 text-sky-500")} />
+                {records.length > 0 && (
+                  <span className="absolute -top-1 -right-2 px-1 min-w-3.5 h-3.5 rounded-full bg-sky-500 text-white text-[8px] font-mono font-bold flex items-center justify-center">
+                    {records.length > 99 ? '99+' : records.length}
+                  </span>
+                )}
+                {activeSection === 'ocr' && (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.8)]" />
+                )}
+              </div>
+              <span className="text-[10px] tracking-tight">CusDec</span>
+            </button>
+
+            {/* 3. Tally Recon Tab */}
+            <button
+              type="button"
+              onClick={() => navigateToSection('tally')}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer active:scale-95",
+                activeSection === 'tally'
+                  ? "text-emerald-600 dark:text-emerald-400 font-extrabold"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              )}
+            >
+              <div className="relative">
+                <ScanLine className={cn("w-5 h-5 transition-transform duration-200", activeSection === 'tally' && "scale-110 text-emerald-500")} />
+                {activeSection === 'tally' && (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                )}
+              </div>
+              <span className="text-[10px] tracking-tight">Tally</span>
+            </button>
+
+            {/* 4. Chat Tab */}
+            <button
+              type="button"
+              onClick={() => navigateToSection('chat')}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer active:scale-95",
+                activeSection === 'chat'
+                  ? "text-blue-600 dark:text-blue-400 font-extrabold"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              )}
+            >
+              <div className="relative">
+                <MessageCircle className={cn("w-5 h-5 transition-transform duration-200", activeSection === 'chat' && "scale-110 text-blue-500")} />
+                {activeSection === 'chat' && (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                )}
+              </div>
+              <span className="text-[10px] tracking-tight">Chat</span>
+            </button>
+
+            {/* 5. Profile Tab */}
+            <button
+              type="button"
+              onClick={() => navigateToSection('profile')}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer active:scale-95",
+                activeSection === 'profile'
+                  ? "text-indigo-600 dark:text-indigo-400 font-extrabold"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              )}
+            >
+              <div className="relative">
+                {currentUser?.avatarUrl && !currentUser.avatarUrl.includes('images.unsplash.com') ? (
+                  <div className={cn("w-5 h-5 rounded-full overflow-hidden border border-border shrink-0 transition-transform duration-200", activeSection === 'profile' && "ring-2 ring-indigo-500 scale-110")}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
+                  </div>
+                ) : (
+                  <User className={cn("w-5 h-5 transition-transform duration-200", activeSection === 'profile' && "scale-110 text-indigo-500")} />
+                )}
+                {activeSection === 'profile' && (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                )}
+              </div>
+              <span className="text-[10px] tracking-tight">Profile</span>
+            </button>
+          </div>
+        </nav>
       </div>
 
       {/* ========================================================
@@ -4804,7 +4931,7 @@ export default function LrsysPortal() {
                     <Lock className="w-4 h-4 shrink-0" />
                     <div>
                       <p className="font-semibold">Read-Only Viewport</p>
-                      <p className="text-[11px] opacity-80">Editing and saving declaration fields is restricted to LRS & IC clearance.</p>
+                      <p className="text-[11px] opacity-80">Editing and saving declaration fields is restricted to authorized customs clearance.</p>
                     </div>
                   </div>
                 )}

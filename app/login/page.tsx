@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { UserRole } from '@/lib/authTypes';
 import {
   ShieldCheck,
   Lock,
@@ -13,13 +12,11 @@ import {
   ArrowRight,
   AlertCircle,
   Loader2,
-  Terminal,
   KeyRound,
   CheckCircle2,
   Sun,
   Moon,
-  Building2,
-  BadgeCheck
+  Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -31,7 +28,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successRole, setSuccessRole] = useState<string | null>(null);
-  const [selectedDemoRole, setSelectedDemoRole] = useState<string | null>(null);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
@@ -84,52 +80,6 @@ export default function LoginPage() {
     } catch {}
   };
 
-  // Quick-fill credentials for role testing
-  const demoAccounts = [
-    {
-      role: 'DEV' as UserRole,
-      label: 'Developer',
-      id: 'dev',
-      pass: 'Dev@LRSYS2026!',
-      desc: 'Root Administration & Core Pipelines',
-    },
-    {
-      role: 'IC' as UserRole,
-      label: 'IC Officer',
-      id: 'ic_officer',
-      pass: 'Ic@LRSYS2026!',
-      desc: 'Inward Cargo Examination & Verification',
-    },
-    {
-      role: 'APPRAISER' as UserRole,
-      label: 'Appraiser',
-      id: 'appraiser',
-      pass: 'Appraiser@LRSYS2026!',
-      desc: 'Declaration Valuation & Inspection Bay',
-    },
-    {
-      role: 'DDC' as UserRole,
-      label: 'DDC Director',
-      id: 'ddc_director',
-      pass: 'Ddc@LRSYS2026!',
-      desc: 'Executive Customs Approval & Audit',
-    },
-    {
-      role: 'LRS' as UserRole,
-      label: 'LRS Staff',
-      id: 'lrs_staff',
-      pass: 'Lrs@LRSYS2026!',
-      desc: 'Long Room Supervision & Tally Ledger',
-    },
-  ];
-
-  const handleFillDemo = (acc: typeof demoAccounts[0]) => {
-    setIdentifier(acc.id);
-    setPassword(acc.pass);
-    setSelectedDemoRole(acc.role);
-    setErrorMessage('');
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim() || !password) {
@@ -164,10 +114,8 @@ export default function LoginPage() {
     }
   };
 
-  const activeDemo = demoAccounts.find(d => d.role === selectedDemoRole);
-
   return (
-    <div className="min-h-screen w-full relative overflow-hidden flex flex-col items-center justify-center p-4 sm:p-6 bg-background text-foreground transition-colors duration-300 selection:bg-cyan-500/25 selection:text-cyan-600 dark:selection:text-cyan-300">
+    <div className="min-h-screen min-h-[100dvh] w-full relative overflow-hidden flex flex-col items-center justify-center p-3 sm:p-6 bg-background text-foreground transition-colors duration-300 selection:bg-cyan-500/25 selection:text-cyan-600 dark:selection:text-cyan-300">
       
       {/* ========================================================
            BACKGROUND ATMOSPHERIC MOTION & AMBIENT ANIMATION
@@ -229,11 +177,11 @@ export default function LoginPage() {
       {/* ========================================================
            TOP BAR: THEME TOGGLE (TOP RIGHT CORNER)
            ======================================================== */}
-      <div className="absolute top-5 right-5 sm:top-6 sm:right-6 z-30">
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-30 pt-safe pr-safe">
         <button
           type="button"
           onClick={toggleTheme}
-          className="h-10 w-10 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-white/70 dark:bg-zinc-900/70 hover:bg-white dark:hover:bg-zinc-800 backdrop-blur-xl flex items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer shadow-sm active:scale-95"
+          className="h-9 w-9 sm:h-10 sm:w-10 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-white/70 dark:bg-zinc-900/70 hover:bg-white dark:hover:bg-zinc-800 backdrop-blur-xl flex items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer shadow-sm active:scale-95"
           title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           aria-label="Toggle Theme"
         >
@@ -547,61 +495,6 @@ export default function LoginPage() {
                     </div>
                   </motion.button>
                 </form>
-
-                {/* Quick-Role Testing Fast-Switcher Deck */}
-                <div className="pt-4 border-t border-black/[0.06] dark:border-white/[0.06] space-y-2">
-                  <div className="flex items-center justify-between text-left">
-                    <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <Terminal className="w-3.5 h-3.5 text-cyan-500" />
-                      Quick Role Testing Select:
-                    </span>
-                    <span className="text-[10px] font-mono text-muted-foreground/60">1-Click Fill</span>
-                  </div>
-
-                  {/* Role Pills */}
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {demoAccounts.map((acc) => {
-                      const isSelected = selectedDemoRole === acc.role;
-                      return (
-                        <button
-                          key={acc.role}
-                          type="button"
-                          onClick={() => handleFillDemo(acc)}
-                          disabled={isLoading}
-                          className={cn(
-                            "h-8 px-1 rounded-xl text-[11px] font-bold font-mono border transition-all duration-150 cursor-pointer flex items-center justify-center active:scale-95",
-                            isSelected
-                              ? "bg-cyan-500/15 border-cyan-500/50 text-cyan-600 dark:text-cyan-400 shadow-xs"
-                              : "bg-black/[0.02] dark:bg-white/[0.03] border-black/[0.06] dark:border-white/[0.06] text-muted-foreground hover:text-foreground hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
-                          )}
-                          title={`Click to fill ${acc.label} credentials (${acc.id})`}
-                        >
-                          {acc.role}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Active Selected Role Hint */}
-                  {activeDemo && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-2.5 rounded-xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.06] text-left flex items-center justify-between"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
-                          <BadgeCheck className="w-3.5 h-3.5 text-cyan-500" />
-                          <span>{activeDemo.label}</span>
-                          <span className="text-muted-foreground/60 font-mono text-[10px]">({activeDemo.id})</span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground leading-normal">
-                          {activeDemo.desc}
-                        </p>
-                      </div>
-                    </motion.div>
-                  )}
-                </div>
               </div>
             </div>
           </motion.div>

@@ -70,7 +70,7 @@ export function AppleOtpInput({
       {/* Visual Shadcn Segmented Slots */}
       <div
         onClick={handleBoxClick}
-        className="flex items-center justify-center gap-2 py-1 cursor-text"
+        className="flex items-center justify-center gap-1.5 sm:gap-2 py-1 cursor-text max-w-full overflow-hidden"
       >
         {Array.from({ length }).map((_, idx) => {
           const char = digits[idx] || '';
@@ -81,12 +81,12 @@ export function AppleOtpInput({
           return (
             <React.Fragment key={idx}>
               {isMiddleDivider && (
-                <div className="w-2 h-0.5 bg-border rounded-full mx-0.5 shrink-0" />
+                <div className="w-1.5 sm:w-2 h-0.5 bg-border rounded-full mx-0.5 shrink-0" />
               )}
 
               <div
                 className={cn(
-                  "relative w-10 h-12 sm:w-11 sm:h-14 rounded-md border text-center flex items-center justify-center font-mono font-bold text-lg transition-all shadow-xs",
+                  "relative w-9 h-11 xs:w-10 xs:h-12 sm:w-11 sm:h-14 rounded-md border text-center flex items-center justify-center font-mono font-bold text-base sm:text-lg transition-all shadow-xs shrink-0",
                   isCurrentActive
                     ? "border-ring ring-1 ring-ring bg-background text-foreground"
                     : isFilled

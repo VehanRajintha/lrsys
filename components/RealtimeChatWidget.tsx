@@ -108,6 +108,16 @@ const ROLE_AVATARS: Record<UserRole, { gradient: string; initials: string; ringC
     gradient: 'from-teal-500 via-emerald-600 to-blue-600',
     initials: 'LR',
     ringColor: 'ring-teal-500'
+  },
+  ASC: {
+    gradient: 'from-blue-600 via-indigo-600 to-cyan-600',
+    initials: 'AS',
+    ringColor: 'ring-blue-500'
+  },
+  DC: {
+    gradient: 'from-rose-600 via-red-600 to-pink-600',
+    initials: 'DC',
+    ringColor: 'ring-rose-500'
   }
 };
 
@@ -1265,7 +1275,7 @@ export function RealtimeChatWidget({ currentUser }: RealtimeChatWidgetProps) {
       <div
         data-chat-widget="true"
         className={cn(
-          'fixed bottom-6 right-6 z-50 transition-all duration-300 ease-out',
+          'fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-50 transition-all duration-300 ease-out',
           isOpen
             ? 'opacity-0 scale-50 pointer-events-none translate-y-2 rotate-45'
             : 'opacity-100 scale-100 pointer-events-auto translate-y-0 rotate-0'
@@ -1278,7 +1288,7 @@ export function RealtimeChatWidget({ currentUser }: RealtimeChatWidgetProps) {
             setIsMinimized(false);
             fetchConversations(conversations.length === 0);
           }}
-          className="relative flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white shadow-[0_12px_35px_rgba(14,165,233,0.45)] border border-white/20 dark:border-sky-400/40 backdrop-blur-xl transition-transform duration-200 hover:scale-105 active:scale-95 group cursor-pointer"
+          className="relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white shadow-[0_12px_35px_rgba(14,165,233,0.45)] border border-white/20 dark:border-sky-400/40 backdrop-blur-xl transition-transform duration-200 hover:scale-105 active:scale-95 group cursor-pointer"
           title="Open Sri Lanka Customs Messenger"
         >
           <MessageCircle className="w-6 h-6 transition-transform group-hover:rotate-12" />
@@ -1304,13 +1314,13 @@ export function RealtimeChatWidget({ currentUser }: RealtimeChatWidgetProps) {
         onDrop={handleDrop}
         onPaste={handlePaste}
         className={cn(
-          'fixed bottom-6 right-6 z-50 w-[380px] sm:w-[420px] rounded-3xl origin-bottom-right transition-all duration-300 ease-out select-none flex flex-col overflow-hidden',
+          'fixed inset-x-2 bottom-20 sm:inset-x-auto sm:bottom-6 sm:right-6 z-50 w-auto sm:w-[420px] max-w-[calc(100vw-16px)] rounded-3xl origin-bottom-right transition-all duration-300 ease-out select-none flex flex-col overflow-hidden',
           // Opening & Closing Smooth Animation
           isOpen
             ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 scale-75 translate-y-8 pointer-events-none',
           // Minimize / Maximize height transition
-          isMinimized ? 'h-16' : 'h-[620px] max-h-[88vh]',
+          isMinimized ? 'h-16' : 'h-[620px] max-h-[calc(100dvh-6rem)] sm:max-h-[88vh]',
           // Dragging Highlight
           isDragging && 'ring-2 ring-blue-500 ring-offset-2 ring-offset-white dark:ring-offset-black',
           // Translucent Glassmorphism Styling (Light & Dark Mode)
