@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SafeUser, UserRole, ROLE_CONFIGS } from '@/lib/authTypes';
 import { ChatMessage, ConversationSummary, ChatAttachment, MessageType } from '@/lib/chatTypes';
+import { playIncomingMessageSound } from '@/lib/notificationSound';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -318,11 +319,12 @@ export function FullScreenChatDeck({
     return () => window.removeEventListener('click', handleOutside);
   }, [activeReactionMsgId]);
 
-  // Clean up stale typing statuses every 1.5 seconds
+  // Clean up stale typing statuses every 2.5 seconds (only evaluates when someone is actively typing)
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = Date.now();
       setTypingUsers((prev) => {
+        if (Object.keys(prev).length === 0) return prev;
+        const now = Date.now();
         let changed = false;
         const next: typeof prev = {};
         for (const [k, v] of Object.entries(prev)) {
@@ -334,7 +336,7 @@ export function FullScreenChatDeck({
         }
         return changed ? next : prev;
       });
-    }, 1500);
+    }, 2500);
     return () => clearInterval(timer);
   }, []);
 
@@ -463,6 +465,16 @@ export function FullScreenChatDeck({
           const newMsg: ChatMessage = JSON.parse(event.data);
           const currentPartner = activePartnerRef.current;
           const isGroupMsg = newMsg.receiverId === 'group-long-room' || newMsg.channelId === 'group-long-room';
+
+          // Trigger authentic WhatsApp chime for messages from other users (sound only, since chat window is already open)
+          if (newMsg.senderId !== currentUser.id) {
+            playIncomingMessageSound();
+          }
+
+          // Trigger authentic WhatsApp chime for messages from other users (sound only, since chat window is already open)
+          if (newMsg.senderId !== currentUser.id) {
+            playIncomingMessageSound();
+          }
 
           // 1. Update message viewport if chatting in this channel/partner
           if (
@@ -691,6 +703,8 @@ export function FullScreenChatDeck({
       }).then(() => fetchConversations(false)).catch(() => { });
     }
   };
+
+
 
   // Upload attachment raw
   const uploadAttachmentRaw = async (

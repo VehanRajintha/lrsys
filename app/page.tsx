@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from 'react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
 import { CusDecRecord, Settings, QueueStatus, Stats, TallyResult, TallyRecord } from '@/lib/types';
@@ -101,6 +101,8 @@ import {
   Radio,
   BookOpen,
   MessageCircle,
+  Calendar as CalendarIcon,
+  CalendarDays,
 } from 'lucide-react';
 
 import { SafeUser, UserRole, ROLE_CONFIGS } from '@/lib/authTypes';
@@ -111,6 +113,8 @@ import { OfficerProfileDeck } from '@/components/OfficerProfileDeck';
 import { StatisticsAnalyticsDeck } from '@/components/StatisticsAnalyticsDeck';
 import { DefaultUserAvatar } from '@/components/ui/avatar';
 import { FullScreenChatDeck } from '@/components/FullScreenChatDeck';
+import { DeclarationCalendarBar } from '@/components/DeclarationCalendarBar';
+import { parseRecordDate, formatLongDateDisplay } from '@/lib/dateUtils';
 
 export interface WorkerStreamState {
   id: number;
@@ -218,6 +222,13 @@ export default function LrsysPortal() {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [isStampAscending, setIsStampAscending] = useState(false);
 
+  // Calendar & Day-by-Day Date State (Strictly upload / ingestion date)
+  const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD or empty for all days
+
+  // Ultra-responsive client pagination state for low-end office PCs
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number | 'all'>(50); // Options: 25, 50, 100, 'all'
+
   // Skeleton Loading states
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isTableLoading, setIsTableLoading] = useState(false);
@@ -234,69 +245,106 @@ export default function LrsysPortal() {
     setIsMobileSidebarOpen(false);
   };
 
-  // Dynamic identification of duplicate records (strictly requires at least 3 matching critical fields)
+  // Dynamic identification of duplicate records (Optimized O(N) hash-indexed clustering for low-end PCs)
   const duplicateIdSet = useMemo(() => {
     const dupIds = new Set<string>();
     const n = records.length;
     if (n <= 1) return dupIds;
 
+    // 1. Single O(N) normalization and hash-bucket indexing pass
+    const norm = new Array<{
+      id: string;
+      stamp: string | null;
+      ref: string | null;
+      consignee: string | null;
+      declarant: string | null;
+      date: string | null;
+      fileHash: string | null;
+    }>(n);
+
+    const stampRefMap = new Map<string, number[]>();
+    const hashMap = new Map<string, number[]>();
+
+    for (let i = 0; i < n; i++) {
+      const r = records[i];
+      const stamp = r.greenStampNumber && r.greenStampNumber !== '000000' && r.greenStampNumber.length >= 4
+        ? r.greenStampNumber.trim()
+        : null;
+      const ref = r.customsRefNumber && r.customsRefNumber !== 'UNKNOWN' && r.customsRefNumber.length >= 4
+        ? r.customsRefNumber.replace(/\s+/g, '').toUpperCase()
+        : null;
+      const consignee = r.consigneeName && r.consigneeName !== 'UNKNOWN' && r.consigneeName.length >= 3
+        ? r.consigneeName.trim().toUpperCase()
+        : null;
+      const declarant = r.declarantName && r.declarantName !== 'NOT SPECIFIED' && r.declarantName.length >= 3
+        ? r.declarantName.trim().toUpperCase()
+        : null;
+      const date = r.customsDate && r.customsDate.trim().length >= 6
+        ? r.customsDate.trim()
+        : null;
+      const fileHash = r.fileHash || null;
+
+      norm[i] = { id: r.id, stamp, ref, consignee, declarant, date, fileHash };
+
+      if (stamp && ref) {
+        const key = stamp + '||' + ref;
+        let arr = stampRefMap.get(key);
+        if (!arr) { arr = []; stampRefMap.set(key, arr); }
+        arr.push(i);
+      }
+      if (fileHash) {
+        let arr = hashMap.get(fileHash);
+        if (!arr) { arr = []; hashMap.set(fileHash, arr); }
+        arr.push(i);
+      }
+    }
+
     const seenGroup = new Set<number>();
 
     for (let i = 0; i < n; i++) {
       if (seenGroup.has(i)) continue;
-      const primary = records[i];
+      const p = norm[i];
 
-      const pStamp = primary.greenStampNumber && primary.greenStampNumber !== '000000' && primary.greenStampNumber.length >= 4
-        ? primary.greenStampNumber.trim()
-        : null;
-      const pRef = primary.customsRefNumber && primary.customsRefNumber !== 'UNKNOWN' && primary.customsRefNumber.length >= 4
-        ? primary.customsRefNumber.replace(/\s+/g, '').toUpperCase()
-        : null;
-      const pConsignee = primary.consigneeName && primary.consigneeName !== 'UNKNOWN' && primary.consigneeName.length >= 3
-        ? primary.consigneeName.trim().toUpperCase()
-        : null;
-      const pDeclarant = primary.declarantName && primary.declarantName !== 'NOT SPECIFIED' && primary.declarantName.length >= 3
-        ? primary.declarantName.trim().toUpperCase()
-        : null;
-      const pDate = primary.customsDate && primary.customsDate.trim().length >= 6
-        ? primary.customsDate.trim()
-        : null;
+      // Collect only candidate records that share Stamp+Ref or FileHash
+      const candidateIndices = new Set<number>();
+      if (p.stamp && p.ref) {
+        const arr = stampRefMap.get(p.stamp + '||' + p.ref);
+        if (arr) {
+          for (const idx of arr) {
+            if (idx > i) candidateIndices.add(idx);
+          }
+        }
+      }
+      if (p.fileHash) {
+        const arr = hashMap.get(p.fileHash);
+        if (arr) {
+          for (const idx of arr) {
+            if (idx > i) candidateIndices.add(idx);
+          }
+        }
+      }
+
+      if (candidateIndices.size === 0) continue;
 
       let groupHasDuplicates = false;
 
-      for (let j = i + 1; j < n; j++) {
+      for (const j of candidateIndices) {
         if (seenGroup.has(j)) continue;
-        const candidate = records[j];
-
-        const cStamp = candidate.greenStampNumber && candidate.greenStampNumber !== '000000' && candidate.greenStampNumber.length >= 4
-          ? candidate.greenStampNumber.trim()
-          : null;
-        const cRef = candidate.customsRefNumber && candidate.customsRefNumber !== 'UNKNOWN' && candidate.customsRefNumber.length >= 4
-          ? candidate.customsRefNumber.replace(/\s+/g, '').toUpperCase()
-          : null;
-        const cConsignee = candidate.consigneeName && candidate.consigneeName !== 'UNKNOWN' && candidate.consigneeName.length >= 3
-          ? candidate.consigneeName.trim().toUpperCase()
-          : null;
-        const cDeclarant = candidate.declarantName && candidate.declarantName !== 'NOT SPECIFIED' && candidate.declarantName.length >= 3
-          ? candidate.declarantName.trim().toUpperCase()
-          : null;
-        const cDate = candidate.customsDate && candidate.customsDate.trim().length >= 6
-          ? candidate.customsDate.trim()
-          : null;
+        const c = norm[j];
 
         let matchCount = 0;
-        if (pStamp && cStamp && pStamp === cStamp) matchCount++;
-        if (pRef && cRef && pRef === cRef) matchCount++;
-        if (pConsignee && cConsignee && (pConsignee === cConsignee || pConsignee.includes(cConsignee) || cConsignee.includes(pConsignee))) matchCount++;
-        if (pDeclarant && cDeclarant && (pDeclarant === cDeclarant || pDeclarant.includes(cDeclarant) || cDeclarant.includes(pDeclarant))) matchCount++;
-        if (pDate && cDate && pDate === cDate) matchCount++;
+        if (p.stamp && c.stamp && p.stamp === c.stamp) matchCount++;
+        if (p.ref && c.ref && p.ref === c.ref) matchCount++;
+        if (p.consignee && c.consignee && (p.consignee === c.consignee || p.consignee.includes(c.consignee) || c.consignee.includes(p.consignee))) matchCount++;
+        if (p.declarant && c.declarant && (p.declarant === c.declarant || p.declarant.includes(c.declarant) || c.declarant.includes(p.declarant))) matchCount++;
+        if (p.date && c.date && p.date === c.date) matchCount++;
 
         // Duplicate match: Must match primary identifiers (Stamp + Ref) AND at least one party/date (reaching >= 3 matching critical fields)
-        const isMatch = (pStamp && cStamp && pStamp === cStamp && pRef && cRef && pRef === cRef && matchCount >= 3) ||
-          (primary.fileHash && candidate.fileHash && primary.fileHash === candidate.fileHash && (pStamp === cStamp || pRef === cRef));
+        const isMatch = (p.stamp && c.stamp && p.stamp === c.stamp && p.ref && c.ref && p.ref === c.ref && matchCount >= 3) ||
+          (p.fileHash && c.fileHash && p.fileHash === c.fileHash && (p.stamp === c.stamp || p.ref === c.ref));
 
         if (isMatch) {
-          dupIds.add(candidate.id);
+          dupIds.add(c.id);
           seenGroup.add(j);
           groupHasDuplicates = true;
         }
@@ -510,9 +558,13 @@ export default function LrsysPortal() {
     fetchStorageStats();
 
     // Start queue telemetry polling (only monitors if client is not actively processing)
+    let statsCounter = 0;
     const interval = setInterval(async () => {
-      // Periodically refresh storage stats smoothly
-      fetchStorageStats();
+      // Periodically refresh storage stats smoothly every 25s
+      statsCounter++;
+      if (statsCounter % 5 === 0) {
+        fetchStorageStats();
+      }
 
       if (isClientProcessingRef.current) return;
 
@@ -526,7 +578,7 @@ export default function LrsysPortal() {
           }
         }
       } catch (err) { }
-    }, 4000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, []);
@@ -702,10 +754,10 @@ export default function LrsysPortal() {
     }
   };
 
-  // Dedicated Real-Time System Telemetry Polling (Smooth 2.5s live polling, 1.2s when modal is active)
+  // Dedicated Real-Time System Telemetry Polling (15s idle polling, 1.5s when modal is active)
   useEffect(() => {
     fetchSystemInfo();
-    const intervalTime = isSystemModalOpen ? 1200 : 2500;
+    const intervalTime = isSystemModalOpen ? 1500 : 15000;
     const sysInterval = setInterval(() => {
       if (typeof document !== 'undefined' && !document.hidden) {
         fetchSystemInfo();
@@ -788,11 +840,20 @@ export default function LrsysPortal() {
     }
   }, [selectedRecord]);
 
+  // Defer search term updates to keep input typing at 60fps on low-end hardware
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+
   const filteredRecords = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
+    const q = deferredSearchTerm.trim().toLowerCase();
     const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
 
     const list = records.filter(r => {
+      // 0. Calendar / Day-by-Day filter (strictly based on system upload date)
+      if (selectedDate) {
+        const recordDate = parseRecordDate(r, 'created');
+        if (recordDate !== selectedDate) return false;
+      }
+
       // 1. Tab Status filter
       if (filter === 'NEEDS_REVIEW' && r.status !== 'NEEDS_REVIEW') return false;
       if (filter === 'VERIFIED' && r.status !== 'VERIFIED') return false;
@@ -839,7 +900,32 @@ export default function LrsysPortal() {
     }
 
     return list;
-  }, [records, filter, searchTerm, duplicateIdSet, isStampAscending]);
+  }, [records, filter, deferredSearchTerm, duplicateIdSet, isStampAscending, selectedDate]);
+
+  // Reset pagination to first page when search query, filter, date, or sorting changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deferredSearchTerm, filter, selectedDate, isStampAscending]);
+
+  // Total pages calculation
+  const totalPages = useMemo(() => {
+    if (pageSize === 'all') return 1;
+    return Math.max(1, Math.ceil(filteredRecords.length / pageSize));
+  }, [filteredRecords.length, pageSize]);
+
+  // Ensure current page does not exceed total pages
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  // Sliced paginated records for ultra-smooth table rendering
+  const paginatedRecords = useMemo(() => {
+    if (pageSize === 'all') return filteredRecords;
+    const start = (currentPage - 1) * pageSize;
+    return filteredRecords.slice(start, start + pageSize);
+  }, [filteredRecords, currentPage, pageSize]);
 
   const currentRecordIndex = selectedRecord
     ? filteredRecords.findIndex(r => r.id === selectedRecord.id)
@@ -3273,6 +3359,16 @@ export default function LrsysPortal() {
                 )}
               </div>
 
+              {/* ========================================================
+                 DAY-BY-DAY CALENDAR & MANIFEST INSPECTION BAR
+                 ======================================================== */}
+              <DeclarationCalendarBar
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                records={records}
+                totalFilteredRecordsCount={filteredRecords.length}
+              />
+
               {/* Cargo Ledger Full-Width Table Card */}
               <Card className="overflow-hidden rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-gradient-to-b dark:from-[#0d1527] dark:to-[#080d19] shadow-sm dark:shadow-[0_15px_45px_-12px_rgba(0,0,0,0.8)]">
                 <div className="p-4 sm:p-6 pb-4">
@@ -3316,6 +3412,24 @@ export default function LrsysPortal() {
                         >
                           Clear Ledger
                         </Button>
+                      )}
+
+                      {/* Active Day Indicator Pill */}
+                      {selectedDate && (
+                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-700 dark:text-cyan-300 text-xs font-medium shadow-2xs">
+                          <CalendarIcon className="w-3.5 h-3.5 text-cyan-500" />
+                          <span>Day: <strong className="font-semibold">{formatLongDateDisplay(selectedDate)}</strong></span>
+                          <span className="text-muted-foreground/60">•</span>
+                          <span className="font-mono text-[11px] font-bold">{filteredRecords.length} found</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDate('')}
+                            className="ml-1 p-0.5 rounded-full hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 cursor-pointer transition-colors"
+                            title="Clear day filter to view all declarations"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
                     </div>
 
@@ -3402,7 +3516,7 @@ export default function LrsysPortal() {
                         <TableHead>Declarant / Agent</TableHead>
                         <TableHead className="w-28 text-center">Status</TableHead>
                         <TableHead className="w-24 text-center">Confidence</TableHead>
-                        <TableHead className="w-32">Date</TableHead>
+                        <TableHead className="w-32">Upload Date</TableHead>
                         <TableHead className="w-32 text-center">Action</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -3461,6 +3575,26 @@ export default function LrsysPortal() {
                                   Clear Search Filter
                                 </Button>
                               </div>
+                            ) : selectedDate ? (
+                              <div className="space-y-3 max-w-sm mx-auto py-2">
+                                <CalendarIcon className="w-8 h-8 mx-auto mb-2 opacity-50 text-cyan-500" />
+                                <p className="font-semibold text-foreground">
+                                  No declarations recorded on {formatLongDateDisplay(selectedDate)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  There are no {filter !== 'ALL' ? filter.toLowerCase().replace('_', ' ') : ''} customs declarations logged for this day.
+                                </p>
+                                <div className="flex items-center justify-center gap-2 pt-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSelectedDate('')}
+                                    className="text-xs rounded-xl"
+                                  >
+                                    Show All Days
+                                  </Button>
+                                </div>
+                              </div>
                             ) : (
                               <div>
                                 <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
@@ -3473,7 +3607,7 @@ export default function LrsysPortal() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredRecords.map(r => {
+                        paginatedRecords.map(r => {
                           const isSelected = selectedRowIds.has(r.id);
                           return (
                             <TableRow
@@ -3541,7 +3675,18 @@ export default function LrsysPortal() {
                               </TableCell>
 
                               <TableCell className="text-xs text-muted-foreground">
-                                {r.customsDate || r.createdAt || '—'}
+                                {(() => {
+                                  const upDate = parseRecordDate(r, 'created');
+                                  const isMatch = selectedDate && upDate === selectedDate;
+                                  const formatted = r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB') : r.customsDate || '—';
+                                  return isMatch ? (
+                                    <span className="font-semibold text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20 font-mono">
+                                      {formatted}
+                                    </span>
+                                  ) : (
+                                    formatted
+                                  );
+                                })()}
                               </TableCell>
 
                               <TableCell className="text-center" onClick={e => e.stopPropagation()}>
@@ -3577,6 +3722,134 @@ export default function LrsysPortal() {
                     </TableBody>
                   </Table>
                 </div>
+
+                {/* Ultra-Responsive Low-End PC Pagination Toolbar */}
+                {filteredRecords.length > 0 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-[#090e1a]/80 text-xs select-none">
+                    {/* Left: Range Counter & Selected Badge */}
+                    <div className="flex flex-wrap items-center gap-2.5 text-muted-foreground">
+                      <span>
+                        Showing{' '}
+                        <strong className="text-foreground font-semibold">
+                          {pageSize === 'all'
+                            ? `1–${filteredRecords.length}`
+                            : `${Math.min((currentPage - 1) * pageSize + 1, filteredRecords.length)}–${Math.min(currentPage * pageSize, filteredRecords.length)}`}
+                        </strong>{' '}
+                        of <strong className="text-foreground font-semibold">{filteredRecords.length}</strong> declarations
+                      </span>
+
+                      {selectedRowIds.size > 0 && (
+                        <div className="flex items-center gap-1.5 ml-1">
+                          <Badge variant="outline" className="text-[11px] bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30">
+                            {selectedRowIds.size} selected
+                          </Badge>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRowIds(new Set())}
+                            className="text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Page Size & Stepper Controls */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Page Size Selector */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground text-[11px] mr-1">Rows:</span>
+                        {([25, 50, 100, 'all'] as const).map(size => {
+                          const isActive = pageSize === size;
+                          return (
+                            <button
+                              key={size}
+                              type="button"
+                              onClick={() => {
+                                setPageSize(size);
+                                setCurrentPage(1);
+                              }}
+                              className={cn(
+                                "px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer",
+                                isActive
+                                  ? "bg-cyan-600 text-white shadow-2xs font-semibold"
+                                  : "text-muted-foreground hover:bg-slate-200/70 dark:hover:bg-slate-800 hover:text-foreground"
+                              )}
+                            >
+                              {size === 'all' ? 'All' : size}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {pageSize !== 'all' && totalPages > 1 && (
+                        <>
+                          <Separator orientation="vertical" className="h-4 hidden sm:block" />
+
+                          {/* Page Stepper */}
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={currentPage <= 1}
+                              onClick={() => setCurrentPage(1)}
+                              className="h-7 w-7 p-0 text-xs rounded-md"
+                              title="First page"
+                            >
+                              <ChevronsLeft className="w-3.5 h-3.5" />
+                              <span className="sr-only">First</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={currentPage <= 1}
+                              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                              className="h-7 w-7 p-0 text-xs rounded-md"
+                              title="Previous page"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                              <span className="sr-only">Previous</span>
+                            </Button>
+
+                            <div className="flex items-center gap-1 px-2 text-xs">
+                              <span className="text-muted-foreground">Page</span>
+                              <span className="font-mono font-bold text-foreground">{currentPage}</span>
+                              <span className="text-muted-foreground">/</span>
+                              <span className="font-mono text-muted-foreground">{totalPages}</span>
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={currentPage >= totalPages}
+                              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                              className="h-7 w-7 p-0 text-xs rounded-md"
+                              title="Next page"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                              <span className="sr-only">Next</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={currentPage >= totalPages}
+                              onClick={() => setCurrentPage(totalPages)}
+                              className="h-7 w-7 p-0 text-xs rounded-md"
+                              title="Last page"
+                            >
+                              <ChevronsRight className="w-3.5 h-3.5" />
+                              <span className="sr-only">Last</span>
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </Card>
             </div>
           )}

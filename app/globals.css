@@ -206,3 +206,38 @@
 .sidebar-tab-active-glow {
   box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.35), 0 8px 24px -4px rgba(6, 182, 212, 0.35);
 }
+
+/* =========================================================================
+   LOW-END HARDWARE & OFFICE PC PERFORMANCE ENGINE
+   - Layout & style containment to prevent whole-document reflow cascades
+   - Paint containment to isolate table updates & blur filters
+   - GPU sub-pixel compositing to relieve low-power integrated graphics
+   ========================================================================= */
+
+/* Table Layout Containment: isolates table row recalculations */
+tbody tr {
+  contain: layout style;
+}
+
+/* Paint containment helper for cards and complex blur widgets */
+.contain-paint {
+  contain: paint;
+}
+
+/* Sub-pixel GPU compositing layer for smooth 60fps scrolling */
+.gpu-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Reduced motion optimization for low-end graphics / battery saving */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

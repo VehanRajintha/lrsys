@@ -57,20 +57,19 @@ type TrajectoryViewMode = 'cumulative' | 'velocity';
  * Standardizes dates from ISO timestamps or DD/MM/YYYY into YYYY-MM-DD
  */
 function parseRecordDate(record: CusDecRecord, basis: DateBasis): string | null {
-  if (basis === 'created' && record.createdAt) {
-    try {
-      const d = new Date(record.createdAt);
-      if (!isNaN(d.getTime())) {
-        return d.toISOString().slice(0, 10);
-      }
-    } catch {}
+  if (basis === 'created') {
+    if (record.createdAt) {
+      try {
+        const d = new Date(record.createdAt);
+        if (!isNaN(d.getTime())) {
+          return d.toISOString().slice(0, 10);
+        }
+      } catch {}
+    }
+    return null;
   }
 
-  const raw =
-    basis === 'customs'
-      ? record.customsDate
-      : record.createdAt?.slice(0, 10) || record.customsDate;
-
+  const raw = record.customsDate;
   if (!raw) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
 
@@ -343,8 +342,8 @@ export function StatisticsAnalyticsDeck({
     }, 450);
     return () => clearTimeout(timer);
   }, []);
-  // Date Basis & Preset State
-  const [dateBasis, setDateBasis] = useState<DateBasis>('customs');
+  // Date Basis & Preset State (Default: Ingestion / System Upload Date)
+  const [dateBasis, setDateBasis] = useState<DateBasis>('created');
   const [activePreset, setActivePreset] = useState<DatePreset>('all');
   const [trajectoryMode, setTrajectoryMode] = useState<TrajectoryViewMode>('velocity');
   const [pieMode, setPieMode] = useState<'commodity' | 'fidelity'>('commodity');

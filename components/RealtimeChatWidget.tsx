@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SafeUser, UserRole, ROLE_CONFIGS } from '@/lib/authTypes';
 import { ChatMessage, ConversationSummary, ChatAttachment, MessageType } from '@/lib/chatTypes';
+import { playIncomingMessageSound } from '@/lib/notificationSound';
+import { WhatsAppNotificationToast, WhatsAppNotificationPayload } from '@/components/WhatsAppNotificationToast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -320,15 +322,34 @@ export function RealtimeChatWidget({ currentUser }: RealtimeChatWidgetProps) {
     return () => window.removeEventListener('click', handleOutside);
   }, [activeReactionMsgId]);
 
+  // Realtime WhatsApp incoming notification toast overlay state
+  const [incomingNotification, setIncomingNotification] = useState<WhatsAppNotificationPayload | null>(null);
+
+  const isOpenRef = useRef(isOpen);
+  const isMinimizedRef = useRef(isMinimized);
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+    if (isOpen && !isMinimized) {
+      setIncomingNotification(null);
+    }
+  }, [isOpen, isMinimized]);
+  useEffect(() => {
+    isMinimizedRef.current = isMinimized;
+    if (isOpen && !isMinimized) {
+      setIncomingNotification(null);
+    }
+  }, [isOpen, isMinimized]);
+
   useEffect(() => {
     activePartnerRef.current = activePartner;
   }, [activePartner]);
 
-  // Clean up stale typing statuses every 1.5 seconds
+  // Clean up stale typing statuses every 2.5 seconds (only evaluates when someone is actively typing)
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = Date.now();
       setTypingUsers((prev) => {
+        if (Object.keys(prev).length === 0) return prev;
+        const now = Date.now();
         let changed = false;
         const next: typeof prev = {};
         for (const [k, v] of Object.entries(prev)) {
@@ -340,7 +361,7 @@ export function RealtimeChatWidget({ currentUser }: RealtimeChatWidgetProps) {
         }
         return changed ? next : prev;
       });
-    }, 1500);
+    }, 2500);
     return () => clearInterval(timer);
   }, []);
 
@@ -448,6 +469,30 @@ export function RealtimeChatWidget({ currentUser }: RealtimeChatWidgetProps) {
           const newMsg: ChatMessage = JSON.parse(event.data);
           const currentPartner = activePartnerRef.current;
           const isGroupMsg = newMsg.receiverId === 'group-long-room' || newMsg.channelId === 'group-long-room';
+
+          // Trigger authentic WhatsApp chime and notification card overlay for messages from other users
+          if (newMsg.senderId !== currentUser.id) {
+            playIncomingMessageSound();
+
+            const isChatWindowOpen = isOpenRef.current && !isMinimizedRef.current;
+
+            // If already chat window is open, do NOT show the notification card, just play sound only!
+            if (!isChatWindowOpen) {
+              const partnerId = isGroupMsg ? 'group-long-room' : newMsg.senderId;
+              const partnerName = isGroupMsg ? 'Long Room Operations' : newMsg.senderName;
+
+              setIncomingNotification({
+                id: `${newMsg.id}_${Date.now()}`,
+                message: newMsg,
+                partnerId,
+                partnerName,
+                partnerRole: isGroupMsg ? 'GROUP' : newMsg.senderRole,
+                partnerUsername: newMsg.senderUsername,
+                isGroup: isGroupMsg,
+                receivedAt: Date.now(),
+              });
+            }
+          }
 
           // 1. If currently chatting in this channel/partner, push to message viewport immediately
           if (
@@ -1117,6 +1162,32 @@ export function RealtimeChatWidget({ currentUser }: RealtimeChatWidgetProps) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ partnerId: partner.partnerId })
     }).catch(() => {});
+  };
+
+  // Open conversation from WhatsApp notification toast card
+  const handleOpenFromNotification = (payload: WhatsAppNotificationPayload) => {
+    setIsOpen(true);
+    setIsMinimized(false);
+    setIncomingNotification(null);
+
+    const existing = conversations.find((c) => c.partnerId === payload.partnerId);
+    if (existing) {
+      handleSelectPartner(existing);
+    } else {
+      const syntheticPartner: ConversationSummary = {
+        partnerId: payload.partnerId,
+        partnerName: payload.partnerName,
+        partnerUsername: payload.partnerUsername || '',
+        partnerRole: payload.partnerRole || 'APPRAISER',
+        partnerEmail: `${payload.partnerUsername || 'officer'}@customs.gov.lk`,
+        isActive: true,
+        isOnline: true,
+        unreadCount: 0,
+        isGroup: payload.isGroup,
+        lastMessage: payload.message,
+      };
+      handleSelectPartner(syntheticPartner);
+    }
   };
 
   const handleBackToInbox = () => {
@@ -2442,6 +2513,14 @@ export function RealtimeChatWidget({ currentUser }: RealtimeChatWidgetProps) {
           </div>
         </div>
       )}
+
+      {/* Realtime WhatsApp Notification Card Overlay (Bottom Right Corner with Sound) */}
+      <WhatsAppNotificationToast
+        notification={incomingNotification}
+        onDismiss={() => setIncomingNotification(null)}
+        onOpenChat={handleOpenFromNotification}
+        isChatOpen={isOpen && !isMinimized}
+      />
     </>
   );
 }
