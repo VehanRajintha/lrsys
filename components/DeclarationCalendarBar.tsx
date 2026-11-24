@@ -411,7 +411,7 @@ export function DeclarationCalendarBar({
               <span>All Days</span>
               <span
                 className={cn(
-                  "font-mono text-[10px] px-1.5 py-0.2 rounded-full font-bold",
+                  "font-mono text-[10px] px-1.5 py-0.5 rounded-full font-bold",
                   !selectedDate
                     ? "bg-white/25 text-white"
                     : "bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
@@ -443,7 +443,7 @@ export function DeclarationCalendarBar({
                   <span>{formatShortDateDisplay(dateStr)}</span>
                   <span
                     className={cn(
-                      "font-mono text-[10px] px-1.5 py-0.2 rounded-full font-bold",
+                      "font-mono text-[10px] px-1.5 py-0.5 rounded-full font-bold",
                       isSelected
                         ? "bg-white/25 text-white"
                         : "bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
@@ -454,9 +454,9 @@ export function DeclarationCalendarBar({
                   {hasGaps && (
                     <span
                       className={cn(
-                        "inline-flex items-center gap-0.5 font-mono text-[9px] px-1.5 py-0.2 rounded-full font-bold tracking-tight",
+                        "inline-flex items-center gap-1 font-mono text-[9px] px-1.5 py-0.5 rounded-full font-bold tracking-tight whitespace-nowrap shrink-0",
                         isSelected
-                          ? "bg-amber-400 text-amber-950 shadow-xs"
+                          ? "bg-amber-300 text-amber-950 shadow-xs"
                           : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
                       )}
                       title={`${stampAudit.gapsCount} missing stamp gap(s) on ${formatLongDateDisplay(dateStr)}`}
