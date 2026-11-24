@@ -3725,12 +3725,11 @@ export default function LrsysPortal() {
                               <button
                                 type="button"
                                 onClick={() => setIsMissingAuditModalOpen(true)}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-600 dark:text-amber-400 border border-amber-500/35 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer transition-all shadow-xs leading-normal"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-600 dark:text-amber-400 border border-amber-500/35 text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-all shadow-xs"
                                 title={`Found ${missingStampAudit.totalMissingCount} missing stamp numbers in sequence on ${formatLongDateDisplay(selectedDate)}. Click to view audit list.`}
                               >
                                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                                 <span className="font-mono font-bold">{missingStampAudit.totalMissingCount}</span>
-                                <span>Missing</span>
                               </button>
                             )}
                           </div>
