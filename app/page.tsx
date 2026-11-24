@@ -3532,6 +3532,7 @@ export default function LrsysPortal() {
                 onSelectDate={setSelectedDate}
                 records={records}
                 totalFilteredRecordsCount={filteredRecords.length}
+                isStampAscending={isStampAscending}
                 onOpenMissingAuditModal={() => {
                   setIsStampAscending(true);
                   setIsMissingAuditModalOpen(true);
