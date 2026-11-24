@@ -33,6 +33,7 @@ interface DeclarationCalendarBarProps {
   onSelectDate: (date: string) => void;
   records: CusDecRecord[];
   totalFilteredRecordsCount: number;
+  isStampAscending?: boolean;
   onOpenMissingAuditModal?: () => void;
 }
 
@@ -41,6 +42,7 @@ export function DeclarationCalendarBar({
   onSelectDate,
   records,
   totalFilteredRecordsCount,
+  isStampAscending = false,
   onOpenMissingAuditModal,
 }: DeclarationCalendarBarProps) {
   // Aggregate available dates and metrics based strictly on when CusDecs were uploaded to the system
@@ -323,7 +325,7 @@ export function DeclarationCalendarBar({
                   <span>{activeDateStats.review} Needs Review</span>
                 </div>
               )}
-              {activeDateStampAudit && (
+              {isStampAscending && activeDateStampAudit && (
                 activeDateStampAudit.gapsCount > 0 ? (
                   <button
                     type="button"
@@ -438,7 +440,7 @@ export function DeclarationCalendarBar({
                       ? "bg-gradient-to-r from-cyan-500 to-sky-500 text-white shadow-sm shadow-cyan-500/25 scale-[1.02]"
                       : "bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-cyan-500/40"
                   )}
-                  title={`Inspect declarations uploaded on ${formatLongDateDisplay(dateStr)} (${countInfo.total} total${hasGaps ? `, ${stampAudit.gapsCount} sequence gaps` : ''})`}
+                  title={`Inspect declarations uploaded on ${formatLongDateDisplay(dateStr)} (${countInfo.total} total${isStampAscending && hasGaps ? `, ${stampAudit.gapsCount} sequence gaps` : ''})`}
                 >
                   <span>{formatShortDateDisplay(dateStr)}</span>
                   <span
@@ -451,7 +453,7 @@ export function DeclarationCalendarBar({
                   >
                     {countInfo.total}
                   </span>
-                  {hasGaps && (
+                  {isStampAscending && hasGaps && (
                     <span
                       className={cn(
                         "inline-flex items-center gap-1 font-mono text-[9px] px-1.5 py-0.5 rounded-full font-bold tracking-tight whitespace-nowrap shrink-0",
