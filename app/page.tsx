@@ -226,6 +226,7 @@ export default function LrsysPortal() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [isStampAscending, setIsStampAscending] = useState(false);
+  const [isMissingAuditModalOpen, setIsMissingAuditModalOpen] = useState(false);
 
   // Calendar & Day-by-Day Date State (Strictly upload / ingestion date)
   const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD or empty for all days
@@ -974,6 +975,81 @@ export default function LrsysPortal() {
     if (pageSize === 'all') return 1;
     return Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   }, [filteredRecords.length, pageSize]);
+
+  // Audit missing Stamp Duty Numbers in sequential order (active when isStampAscending is true)
+  const missingStampAudit = useMemo(() => {
+    if (!isStampAscending || filteredRecords.length < 2) {
+      return { totalMissingCount: 0, gapsCount: 0, gaps: [], summaryText: '', allMissingFlat: [] as string[] };
+    }
+
+    const parseNum = (s?: string) => {
+      if (!s) return null;
+      const clean = String(s).replace(/\D/g, '');
+      if (!clean) return null;
+      const n = parseInt(clean, 10);
+      return isNaN(n) ? null : n;
+    };
+
+    const gaps: Array<{
+      prevNum: number;
+      currNum: number;
+      from: number;
+      to: number;
+      count: number;
+      missingList: string[];
+    }> = [];
+
+    const allMissingFlat: string[] = [];
+    let totalMissing = 0;
+
+    for (let i = 1; i < filteredRecords.length; i++) {
+      const prevNum = parseNum(filteredRecords[i - 1].greenStampNumber);
+      const currNum = parseNum(filteredRecords[i].greenStampNumber);
+
+      if (prevNum !== null && currNum !== null && currNum > prevNum + 1) {
+        const count = currNum - prevNum - 1;
+        totalMissing += count;
+
+        const missingList: string[] = [];
+        if (count <= 50) {
+          for (let k = prevNum + 1; k < currNum; k++) {
+            const formatted = String(k).padStart(6, '0');
+            missingList.push(formatted);
+            allMissingFlat.push(formatted);
+          }
+        } else {
+          allMissingFlat.push(`${String(prevNum + 1).padStart(6, '0')}...${String(currNum - 1).padStart(6, '0')} (${count} skipped)`);
+        }
+
+        gaps.push({
+          prevNum,
+          currNum,
+          from: prevNum + 1,
+          to: currNum - 1,
+          count,
+          missingList
+        });
+      }
+    }
+
+    let summaryText = '';
+    if (gaps.length > 0) {
+      const parts = gaps.slice(0, 3).map(g => {
+        if (g.count === 1) return String(g.from).padStart(6, '0');
+        if (g.count <= 3 && g.missingList.length > 0) return g.missingList.join(', ');
+        return `${String(g.from).padStart(6, '0')}–${String(g.to).padStart(6, '0')}`;
+      });
+      summaryText = gaps.length > 3 ? `${parts.join(', ')} (+${gaps.length - 3} more)` : parts.join(', ');
+    }
+
+    return {
+      totalMissingCount: totalMissing,
+      gapsCount: gaps.length,
+      gaps,
+      summaryText,
+      allMissingFlat
+    };
+  }, [isStampAscending, filteredRecords]);
 
   // Ensure current page does not exceed total pages
   useEffect(() => {
@@ -3507,6 +3583,34 @@ export default function LrsysPortal() {
                           </button>
                         </div>
                       )}
+
+                      {/* Sequence Audit Alert Pill */}
+                      {isStampAscending && (
+                        missingStampAudit.totalMissingCount > 0 ? (
+                          <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-medium shadow-2xs">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>
+                              Sequence Audit: <strong className="font-semibold">{missingStampAudit.gapsCount} gap{missingStampAudit.gapsCount > 1 ? 's' : ''}</strong> ({missingStampAudit.totalMissingCount} missing)
+                            </span>
+                            <span className="text-muted-foreground/60">•</span>
+                            <span className="font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                              {missingStampAudit.summaryText}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setIsMissingAuditModalOpen(true)}
+                              className="ml-1 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-lg cursor-pointer transition-colors"
+                            >
+                              View List
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-medium shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Sequence Intact: <strong className="font-semibold">No missing stamps</strong></span>
+                          </div>
+                        )
+                      )}
                     </div>
 
                     {/* Search Bar with Instant Real-Time Filtering */}
@@ -3561,8 +3665,8 @@ export default function LrsysPortal() {
                             className="rounded border-border cursor-pointer"
                           />
                         </TableHead>
-                        <TableHead className="w-48 select-none">
-                          <div className="flex items-center gap-2.5">
+                        <TableHead className="w-56 select-none">
+                          <div className="flex items-center gap-2">
                             <span className="font-semibold text-foreground whitespace-nowrap">Stamp Duty No</span>
                             <button
                               type="button"
@@ -3585,6 +3689,17 @@ export default function LrsysPortal() {
                                 )}
                               />
                             </button>
+                            {isStampAscending && missingStampAudit.totalMissingCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setIsMissingAuditModalOpen(true)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-bold cursor-pointer transition-colors shadow-2xs"
+                                title={`Found ${missingStampAudit.totalMissingCount} missing stamp numbers in sequence. Click to view.`}
+                              >
+                                <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                                <span>{missingStampAudit.totalMissingCount} Missing</span>
+                              </button>
+                            )}
                           </div>
                         </TableHead>
                         <TableHead className="w-36">Customs Ref</TableHead>
@@ -3683,14 +3798,86 @@ export default function LrsysPortal() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        paginatedRecords.map(r => {
+                        paginatedRecords.map((r, localIdx) => {
                           const isSelected = selectedRowIds.has(r.id);
+                          const globalIdx = (currentPage - 1) * (pageSize === 'all' ? filteredRecords.length : pageSize) + localIdx;
+
+                          // Check if there is a sequential gap before this row when ascending sort is active
+                          let gapBefore: { prevNum: number; currNum: number; count: number; missingList: string[] } | null = null;
+                          if (isStampAscending && globalIdx > 0) {
+                            const prevR = filteredRecords[globalIdx - 1];
+                            const parseNum = (s?: string) => {
+                              if (!s) return null;
+                              const clean = String(s).replace(/\D/g, '');
+                              if (!clean) return null;
+                              const n = parseInt(clean, 10);
+                              return isNaN(n) ? null : n;
+                            };
+                            const prevNum = parseNum(prevR?.greenStampNumber);
+                            const currNum = parseNum(r.greenStampNumber);
+
+                            if (prevNum !== null && currNum !== null && currNum > prevNum + 1) {
+                              const count = currNum - prevNum - 1;
+                              const missingList: string[] = [];
+                              if (count <= 10) {
+                                for (let k = prevNum + 1; k < currNum; k++) {
+                                  missingList.push(String(k).padStart(6, '0'));
+                                }
+                              }
+                              gapBefore = { prevNum, currNum, count, missingList };
+                            }
+                          }
+
                           return (
-                            <TableRow
-                              key={r.id}
-                              onClick={() => openInspectionModal(r)}
-                              className="cursor-pointer hover:bg-muted/50 data-[state=selected]:bg-muted/70 transition-all duration-150 animate-in fade-in-50"
-                            >
+                            <React.Fragment key={r.id}>
+                              {gapBefore && (
+                                <TableRow
+                                  key={`missing-gap-${r.id}-${gapBefore.prevNum}-${gapBefore.currNum}`}
+                                  className="bg-amber-500/10 dark:bg-amber-950/25 border-y-2 border-dashed border-amber-500/40 hover:bg-amber-500/15 select-none transition-colors"
+                                >
+                                  <TableCell colSpan={9} className="py-2.5 px-4">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                                          <AlertTriangle className="h-3.5 w-3.5" />
+                                        </span>
+                                        <span className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
+                                          Missing Stamp Duty No:
+                                        </span>
+                                        {gapBefore.missingList.length > 0 ? (
+                                          <div className="flex flex-wrap items-center gap-1.5">
+                                            {gapBefore.missingList.map(numStr => (
+                                              <span
+                                                key={numStr}
+                                                className="inline-flex items-center font-mono text-xs font-bold text-amber-700 dark:text-amber-200 bg-amber-500/20 dark:bg-amber-500/25 border border-amber-500/50 px-2 py-0.5 rounded-md shadow-2xs animate-pulse"
+                                              >
+                                                {numStr}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div className="inline-flex items-center gap-1 font-mono text-xs font-bold text-amber-700 dark:text-amber-200 bg-amber-500/20 dark:bg-amber-500/25 border border-amber-500/50 px-2.5 py-0.5 rounded-md shadow-2xs">
+                                            <span>{String(gapBefore.prevNum + 1).padStart(6, '0')}</span>
+                                            <span className="font-sans font-normal text-amber-600 dark:text-amber-400">to</span>
+                                            <span>{String(gapBefore.currNum - 1).padStart(6, '0')}</span>
+                                          </div>
+                                        )}
+                                        <span className="text-xs font-medium text-amber-700/80 dark:text-amber-400/90 ml-1">
+                                          ({gapBefore.count} {gapBefore.count === 1 ? 'stamp skipped in sequence' : 'consecutive stamps skipped'})
+                                        </span>
+                                      </div>
+
+                                      <div className="inline-flex items-center gap-1.5 text-[11px] font-mono text-amber-700 dark:text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-md">
+                                        <span>Sequence jump: {String(gapBefore.prevNum).padStart(6, '0')} → {String(gapBefore.currNum).padStart(6, '0')}</span>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                              <TableRow
+                                onClick={() => openInspectionModal(r)}
+                                className="cursor-pointer hover:bg-muted/50 data-[state=selected]:bg-muted/70 transition-all duration-150 animate-in fade-in-50"
+                              >
                               <TableCell className="text-center" onClick={e => e.stopPropagation()}>
                                 <input
                                   type="checkbox"
@@ -3792,8 +3979,9 @@ export default function LrsysPortal() {
                                 </div>
                               </TableCell>
                             </TableRow>
-                          );
-                        })
+                          </React.Fragment>
+                        );
+                      })
                       )}
                     </TableBody>
                   </Table>
@@ -5929,6 +6117,130 @@ export default function LrsysPortal() {
         onClose={() => setIsChangePasswordOpen(false)}
         currentUser={currentUser}
       />
+
+      {/* ========================================================
+           STAMP DUTY SEQUENCE AUDIT MODAL (Radix UI)
+           ======================================================== */}
+      <Dialog open={isMissingAuditModalOpen} onOpenChange={setIsMissingAuditModalOpen}>
+        <DialogContent className="max-w-2xl bg-white dark:bg-[#0b0f19] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold text-foreground">
+                  Stamp Duty Sequence Audit
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Audit report of skipped or missing counter stamp numbers in sequential ascending order.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-4">
+            {/* Summary Statistics Bar */}
+            <div className="grid grid-cols-3 gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-center">
+              <div>
+                <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
+                  {missingStampAudit.totalMissingCount}
+                </div>
+                <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
+                  Total Missing Stamps
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-foreground font-mono">
+                  {missingStampAudit.gapsCount}
+                </div>
+                <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
+                  Sequence Gaps Found
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                  {filteredRecords.length}
+                </div>
+                <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
+                  Audited Declarations
+                </div>
+              </div>
+            </div>
+
+            {/* List of Gaps */}
+            <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+              {missingStampAudit.gaps.map((gap, gIdx) => (
+                <div
+                  key={`gap-item-${gIdx}`}
+                  className="p-3 rounded-xl bg-white dark:bg-[#070b14] border border-amber-500/25 hover:border-amber-500/40 transition-colors flex flex-wrap items-center justify-between gap-3 shadow-2xs"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-foreground">
+                        Gap #{gIdx + 1}
+                      </span>
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        (between {String(gap.prevNum).padStart(6, '0')} and {String(gap.currNum).padStart(6, '0')})
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {gap.missingList.length > 0 ? (
+                        gap.missingList.map(nStr => (
+                          <span
+                            key={nStr}
+                            className="font-mono text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-md"
+                          >
+                            {nStr}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="font-mono text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-md">
+                          {String(gap.from).padStart(6, '0')} → {String(gap.to).padStart(6, '0')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <Badge variant="outline" className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs font-mono font-bold">
+                      {gap.count} skipped
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4 flex sm:justify-between items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const text = missingStampAudit.allMissingFlat.join(', ');
+                navigator.clipboard.writeText(text);
+                showToast('Missing numbers copied to clipboard', 'info');
+              }}
+              className="gap-1.5 text-xs rounded-xl"
+            >
+              <Copy className="w-3.5 h-3.5 text-cyan-500" />
+              <span>Copy Missing Numbers</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={() => setIsMissingAuditModalOpen(false)}
+              className="rounded-xl px-5 text-xs"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ========================================================
            REALTIME MESSENGER CHAT WIDGET (Zero Delay VPS Storage)

@@ -42,6 +42,15 @@ export async function POST(req: NextRequest) {
       minutesValid: 10
     });
 
+    if (!brevoResult.delivered && !brevoResult.simulated) {
+      return NextResponse.json({
+        success: false,
+        delivered: false,
+        error: brevoResult.message || 'Brevo email delivery failed. Please check your Brevo account settings.',
+        warning: brevoResult.warning
+      }, { status: 502 });
+    }
+
     return NextResponse.json({
       success: true,
       delivered: brevoResult.delivered,

@@ -262,13 +262,23 @@ export async function sendPasswordOtpEmail(options: SendOtpOptions): Promise<Bre
     const data = await response.json();
 
     if (!response.ok) {
-      console.warn('[Brevo API Error]:', data);
+      console.warn('[Brevo API Error]:', response.status, data);
+      const isIpBlocked =
+        response.status === 401 ||
+        response.status === 403 ||
+        String(data?.message || '').toLowerCase().includes('ip') ||
+        String(data?.code || '').toLowerCase().includes('unauthorized');
+
+      const message = isIpBlocked
+        ? 'Brevo Security Alert: API call blocked by IP address review. In the alert email from Brevo, click "[Stop the review of IP addresses]" or disable IP Review in Brevo Security Settings.'
+        : `Brevo email delivery failed: ${data?.message || 'HTTP status ' + response.status}`;
+
       return {
-        success: true,
+        success: false,
         delivered: false,
-        simulated: true,
-        message: 'OTP generated. Brevo email delivery failed; check server console logs.',
-        warning: data?.message || 'Brevo returned non-200 status'
+        simulated: false,
+        message,
+        warning: data?.message || `Brevo HTTP ${response.status}`
       };
     }
 
@@ -282,10 +292,10 @@ export async function sendPasswordOtpEmail(options: SendOtpOptions): Promise<Bre
   } catch (err: any) {
     console.error('[Brevo Dispatch Exception]:', err.message);
     return {
-      success: true,
+      success: false,
       delivered: false,
-      simulated: true,
-      message: 'OTP generated. Email dispatch error occurred; check server logs.',
+      simulated: false,
+      message: 'Email dispatch error occurred; check server network logs.',
       warning: err.message
     };
   }
