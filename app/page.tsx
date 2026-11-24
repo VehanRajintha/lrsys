@@ -3740,7 +3740,7 @@ export default function LrsysPortal() {
                         <TableHead className="w-24 text-center whitespace-nowrap">Status</TableHead>
                         <TableHead className="w-20 text-center whitespace-nowrap">Confidence</TableHead>
                         <TableHead className="w-28 text-center whitespace-nowrap">Upload Date</TableHead>
-                        <TableHead className="w-28 text-center whitespace-nowrap sticky right-0 bg-white/95 dark:bg-[#070b14]/95 backdrop-blur-md z-10 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.12)] dark:shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.5)]">
+                        <TableHead className="w-28 text-center whitespace-nowrap">
                           Action
                         </TableHead>
                       </TableRow>
@@ -3773,7 +3773,7 @@ export default function LrsysPortal() {
                             <TableCell>
                               <Skeleton className="h-4 w-20 rounded" />
                             </TableCell>
-                            <TableCell className="text-center sticky right-0 bg-white/95 dark:bg-[#070b14]/95 z-10">
+                            <TableCell className="text-center">
                               <Skeleton className="h-7 w-16 mx-auto rounded-lg" />
                             </TableCell>
                           </TableRow>
@@ -3910,7 +3910,7 @@ export default function LrsysPortal() {
                               )}
                               <TableRow
                                 onClick={() => openInspectionModal(r)}
-                                className="group cursor-pointer hover:bg-muted/50 data-[state=selected]:bg-muted/70 transition-all duration-150 animate-in fade-in-50"
+                                className="cursor-pointer hover:bg-muted/50 data-[state=selected]:bg-muted/70 transition-all duration-150 animate-in fade-in-50"
                               >
                               <TableCell className="text-center" onClick={e => e.stopPropagation()}>
                                 <input
@@ -3986,7 +3986,7 @@ export default function LrsysPortal() {
                                 })()}
                               </TableCell>
 
-                              <TableCell className="text-center whitespace-nowrap sticky right-0 bg-white/95 dark:bg-[#070b14]/95 group-hover:bg-slate-50 dark:group-hover:bg-[#0c1322] backdrop-blur-md z-10 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.12)] dark:shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.5)]" onClick={e => e.stopPropagation()}>
+                              <TableCell className="text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-center gap-1.5">
                                   <Button
                                     variant="outline"
