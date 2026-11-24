@@ -3697,8 +3697,8 @@ export default function LrsysPortal() {
                             className="rounded border-border cursor-pointer"
                           />
                         </TableHead>
-                        <TableHead className="w-80 min-w-[280px] select-none">
-                          <div className="flex items-center gap-2.5 whitespace-nowrap">
+                        <TableHead className="w-48 whitespace-nowrap select-none">
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <span className="font-semibold text-foreground whitespace-nowrap text-xs">Stamp Duty No</span>
                             <button
                               type="button"
@@ -3725,22 +3725,24 @@ export default function LrsysPortal() {
                               <button
                                 type="button"
                                 onClick={() => setIsMissingAuditModalOpen(true)}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-600 dark:text-amber-400 border border-amber-500/35 text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-all shadow-xs"
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-600 dark:text-amber-400 border border-amber-500/35 text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer transition-all shadow-xs"
                                 title={`Found ${missingStampAudit.totalMissingCount} missing stamp numbers in sequence on ${formatLongDateDisplay(selectedDate)}. Click to view audit list.`}
                               >
-                                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                <span className="font-mono font-bold">{missingStampAudit.totalMissingCount}</span>
+                                <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                                <span className="font-mono">{missingStampAudit.totalMissingCount}</span>
                               </button>
                             )}
                           </div>
                         </TableHead>
-                        <TableHead className="w-36">Customs Ref</TableHead>
-                        <TableHead>Consignee (Box 8)</TableHead>
-                        <TableHead>Declarant / Agent</TableHead>
-                        <TableHead className="w-28 text-center">Status</TableHead>
-                        <TableHead className="w-24 text-center">Confidence</TableHead>
-                        <TableHead className="w-32">Upload Date</TableHead>
-                        <TableHead className="w-32 text-center">Action</TableHead>
+                        <TableHead className="w-28 whitespace-nowrap">Customs Ref</TableHead>
+                        <TableHead className="min-w-[130px] whitespace-nowrap">Consignee (Box 8)</TableHead>
+                        <TableHead className="min-w-[130px] whitespace-nowrap">Declarant / Agent</TableHead>
+                        <TableHead className="w-24 text-center whitespace-nowrap">Status</TableHead>
+                        <TableHead className="w-20 text-center whitespace-nowrap">Confidence</TableHead>
+                        <TableHead className="w-28 text-center whitespace-nowrap">Upload Date</TableHead>
+                        <TableHead className="w-28 text-center whitespace-nowrap sticky right-0 bg-white/95 dark:bg-[#070b14]/95 backdrop-blur-md z-10 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.12)] dark:shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.5)]">
+                          Action
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -3771,7 +3773,7 @@ export default function LrsysPortal() {
                             <TableCell>
                               <Skeleton className="h-4 w-20 rounded" />
                             </TableCell>
-                            <TableCell className="text-center">
+                            <TableCell className="text-center sticky right-0 bg-white/95 dark:bg-[#070b14]/95 z-10">
                               <Skeleton className="h-7 w-16 mx-auto rounded-lg" />
                             </TableCell>
                           </TableRow>
@@ -3908,7 +3910,7 @@ export default function LrsysPortal() {
                               )}
                               <TableRow
                                 onClick={() => openInspectionModal(r)}
-                                className="cursor-pointer hover:bg-muted/50 data-[state=selected]:bg-muted/70 transition-all duration-150 animate-in fade-in-50"
+                                className="group cursor-pointer hover:bg-muted/50 data-[state=selected]:bg-muted/70 transition-all duration-150 animate-in fade-in-50"
                               >
                               <TableCell className="text-center" onClick={e => e.stopPropagation()}>
                                 <input
@@ -3984,7 +3986,7 @@ export default function LrsysPortal() {
                                 })()}
                               </TableCell>
 
-                              <TableCell className="text-center" onClick={e => e.stopPropagation()}>
+                              <TableCell className="text-center whitespace-nowrap sticky right-0 bg-white/95 dark:bg-[#070b14]/95 group-hover:bg-slate-50 dark:group-hover:bg-[#0c1322] backdrop-blur-md z-10 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.12)] dark:shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.5)]" onClick={e => e.stopPropagation()}>
                                 <div className="flex items-center justify-center gap-1.5">
                                   <Button
                                     variant="outline"
