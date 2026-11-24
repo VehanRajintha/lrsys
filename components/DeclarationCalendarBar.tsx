@@ -33,6 +33,7 @@ interface DeclarationCalendarBarProps {
   onSelectDate: (date: string) => void;
   records: CusDecRecord[];
   totalFilteredRecordsCount: number;
+  onOpenMissingAuditModal?: () => void;
 }
 
 export function DeclarationCalendarBar({
@@ -40,6 +41,7 @@ export function DeclarationCalendarBar({
   onSelectDate,
   records,
   totalFilteredRecordsCount,
+  onOpenMissingAuditModal,
 }: DeclarationCalendarBarProps) {
   // Aggregate available dates and metrics based strictly on when CusDecs were uploaded to the system
   const { availableDatesWithCounts, minRecordDate, maxRecordDate } = useMemo(() => {
@@ -69,6 +71,56 @@ export function DeclarationCalendarBar({
     };
   }, [records]);
 
+  // Compute daily stamp sequence audit gaps independently for each upload day tab
+  const dateStampGapsMap = useMemo(() => {
+    const parseNum = (s?: string) => {
+      if (!s) return null;
+      const clean = String(s).replace(/\D/g, "");
+      if (!clean) return null;
+      const n = parseInt(clean, 10);
+      return isNaN(n) ? null : n;
+    };
+
+    const dateGroups = new Map<string, CusDecRecord[]>();
+    for (const r of records) {
+      const d = parseRecordDate(r, "created");
+      if (d) {
+        const list = dateGroups.get(d) || [];
+        list.push(r);
+        dateGroups.set(d, list);
+      }
+    }
+
+    const gapMap = new Map<string, { gapsCount: number; missingCount: number }>();
+
+    for (const [dateStr, recs] of dateGroups.entries()) {
+      const sorted = [...recs].sort((a, b) => {
+        const numA = parseNum(a.greenStampNumber) ?? Infinity;
+        const numB = parseNum(b.greenStampNumber) ?? Infinity;
+        if (numA !== numB) return numA - numB;
+        return (a.greenStampNumber || "").localeCompare(b.greenStampNumber || "");
+      });
+
+      let gapsCount = 0;
+      let missingCount = 0;
+
+      for (let i = 1; i < sorted.length; i++) {
+        const prevNum = parseNum(sorted[i - 1].greenStampNumber);
+        const currNum = parseNum(sorted[i].greenStampNumber);
+
+        if (prevNum !== null && currNum !== null && currNum > prevNum + 1) {
+          const count = currNum - prevNum - 1;
+          gapsCount++;
+          missingCount += count;
+        }
+      }
+
+      gapMap.set(dateStr, { gapsCount, missingCount });
+    }
+
+    return gapMap;
+  }, [records]);
+
   // Statistics for the currently selected date
   const activeDateStats = useMemo(() => {
     if (!selectedDate) return null;
@@ -88,6 +140,12 @@ export function DeclarationCalendarBar({
     }
     return { total, verified, review };
   }, [records, selectedDate]);
+
+  // Sequence audit for the currently selected date tab
+  const activeDateStampAudit = useMemo(() => {
+    if (!selectedDate) return null;
+    return dateStampGapsMap.get(selectedDate) || { gapsCount: 0, missingCount: 0 };
+  }, [selectedDate, dateStampGapsMap]);
 
   // Nearest available date if currently selected date has 0 records
   const nearestRecordedDate = useMemo(() => {
@@ -265,6 +323,24 @@ export function DeclarationCalendarBar({
                   <span>{activeDateStats.review} Needs Review</span>
                 </div>
               )}
+              {activeDateStampAudit && (
+                activeDateStampAudit.gapsCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenMissingAuditModal?.()}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/35 text-amber-700 dark:text-amber-300 text-xs font-semibold hover:bg-amber-500/25 transition-all cursor-pointer shadow-2xs"
+                    title={`View ${activeDateStampAudit.gapsCount} missing stamp gap(s) (${activeDateStampAudit.missingCount} missing) for ${formatLongDateDisplay(selectedDate)}`}
+                  >
+                    <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                    <span>{activeDateStampAudit.gapsCount} Sequence Gap{activeDateStampAudit.gapsCount > 1 ? 's' : ''} ({activeDateStampAudit.missingCount} missing)</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                    <span>Sequence Intact</span>
+                  </div>
+                )
+              )}
             </div>
           )}
         </div>
@@ -348,6 +424,9 @@ export function DeclarationCalendarBar({
             {/* Individual Recorded Date Pills */}
             {availableDatesWithCounts.map(([dateStr, countInfo]) => {
               const isSelected = selectedDate === dateStr;
+              const stampAudit = dateStampGapsMap.get(dateStr);
+              const hasGaps = stampAudit && stampAudit.gapsCount > 0;
+
               return (
                 <button
                   key={`date-pill-${dateStr}`}
@@ -359,7 +438,7 @@ export function DeclarationCalendarBar({
                       ? "bg-gradient-to-r from-cyan-500 to-sky-500 text-white shadow-sm shadow-cyan-500/25 scale-[1.02]"
                       : "bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-cyan-500/40"
                   )}
-                  title={`Inspect declarations uploaded on ${formatLongDateDisplay(dateStr)} (${countInfo.total} total)`}
+                  title={`Inspect declarations uploaded on ${formatLongDateDisplay(dateStr)} (${countInfo.total} total${hasGaps ? `, ${stampAudit.gapsCount} sequence gaps` : ''})`}
                 >
                   <span>{formatShortDateDisplay(dateStr)}</span>
                   <span
@@ -372,6 +451,20 @@ export function DeclarationCalendarBar({
                   >
                     {countInfo.total}
                   </span>
+                  {hasGaps && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-0.5 font-mono text-[9px] px-1.5 py-0.2 rounded-full font-bold tracking-tight",
+                        isSelected
+                          ? "bg-amber-400 text-amber-950 shadow-xs"
+                          : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                      )}
+                      title={`${stampAudit.gapsCount} missing stamp gap(s) on ${formatLongDateDisplay(dateStr)}`}
+                    >
+                      <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                      <span>{stampAudit.gapsCount} gap{stampAudit.gapsCount > 1 ? 's' : ''}</span>
+                    </span>
+                  )}
                 </button>
               );
             })}

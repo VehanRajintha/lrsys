@@ -976,10 +976,27 @@ export default function LrsysPortal() {
     return Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   }, [filteredRecords.length, pageSize]);
 
-  // Audit missing Stamp Duty Numbers in sequential order (active when isStampAscending is true)
+  // Audit missing Stamp Duty Numbers in sequential order (active when isStampAscending is true and scoped to selected date)
   const missingStampAudit = useMemo(() => {
-    if (!isStampAscending || filteredRecords.length < 2) {
-      return { totalMissingCount: 0, gapsCount: 0, gaps: [], summaryText: '', allMissingFlat: [] as string[] };
+    if (!isStampAscending) {
+      return { totalMissingCount: 0, gapsCount: 0, gaps: [], summaryText: '', allMissingFlat: [] as string[], isAllDaysNotice: false };
+    }
+
+    // In Customs Long Room, each day is an independent batch and book sequence.
+    // If "All Days" is selected, prompt user to select a specific date tab rather than mixing separate days' stamp counter books.
+    if (!selectedDate) {
+      return {
+        totalMissingCount: 0,
+        gapsCount: 0,
+        gaps: [],
+        summaryText: 'Select a day tab above to audit stamp sequence',
+        allMissingFlat: [] as string[],
+        isAllDaysNotice: true
+      };
+    }
+
+    if (filteredRecords.length < 2) {
+      return { totalMissingCount: 0, gapsCount: 0, gaps: [], summaryText: '', allMissingFlat: [] as string[], isAllDaysNotice: false };
     }
 
     const parseNum = (s?: string) => {
@@ -1047,9 +1064,10 @@ export default function LrsysPortal() {
       gapsCount: gaps.length,
       gaps,
       summaryText,
-      allMissingFlat
+      allMissingFlat,
+      isAllDaysNotice: false
     };
-  }, [isStampAscending, filteredRecords]);
+  }, [isStampAscending, filteredRecords, selectedDate]);
 
   // Ensure current page does not exceed total pages
   useEffect(() => {
@@ -3511,6 +3529,10 @@ export default function LrsysPortal() {
                 onSelectDate={setSelectedDate}
                 records={records}
                 totalFilteredRecordsCount={filteredRecords.length}
+                onOpenMissingAuditModal={() => {
+                  setIsStampAscending(true);
+                  setIsMissingAuditModalOpen(true);
+                }}
               />
 
               {/* Cargo Ledger Full-Width Table Card */}
@@ -3586,11 +3608,18 @@ export default function LrsysPortal() {
 
                       {/* Sequence Audit Alert Pill */}
                       {isStampAscending && (
-                        missingStampAudit.totalMissingCount > 0 ? (
+                        !selectedDate ? (
+                          <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-700 dark:text-cyan-300 text-xs font-medium shadow-2xs">
+                            <Layers className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
+                            <span>
+                              Sequence Audit: <strong>Select a day tab above</strong> (e.g. Nov 17, Nov 16) to audit daily stamp sequence
+                            </span>
+                          </div>
+                        ) : missingStampAudit.totalMissingCount > 0 ? (
                           <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-medium shadow-2xs">
                             <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                             <span>
-                              Sequence Audit: <strong className="font-semibold">{missingStampAudit.gapsCount} gap{missingStampAudit.gapsCount > 1 ? 's' : ''}</strong> ({missingStampAudit.totalMissingCount} missing)
+                              Sequence Audit ({formatShortDateDisplay(selectedDate)}): <strong className="font-semibold">{missingStampAudit.gapsCount} gap{missingStampAudit.gapsCount > 1 ? 's' : ''}</strong> ({missingStampAudit.totalMissingCount} missing)
                             </span>
                             <span className="text-muted-foreground/60">•</span>
                             <span className="font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400">
@@ -3607,7 +3636,7 @@ export default function LrsysPortal() {
                         ) : (
                           <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-medium shadow-2xs">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                            <span>Sequence Intact: <strong className="font-semibold">No missing stamps</strong></span>
+                            <span>Sequence Intact ({formatShortDateDisplay(selectedDate)}): <strong className="font-semibold">No missing stamps</strong></span>
                           </div>
                         )
                       )}
@@ -3689,12 +3718,12 @@ export default function LrsysPortal() {
                                 )}
                               />
                             </button>
-                            {isStampAscending && missingStampAudit.totalMissingCount > 0 && (
+                            {isStampAscending && selectedDate && missingStampAudit.totalMissingCount > 0 && (
                               <button
                                 type="button"
                                 onClick={() => setIsMissingAuditModalOpen(true)}
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-bold cursor-pointer transition-colors shadow-2xs"
-                                title={`Found ${missingStampAudit.totalMissingCount} missing stamp numbers in sequence. Click to view.`}
+                                title={`Found ${missingStampAudit.totalMissingCount} missing stamp numbers in sequence on ${formatLongDateDisplay(selectedDate)}. Click to view.`}
                               >
                                 <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
                                 <span>{missingStampAudit.totalMissingCount} Missing</span>
@@ -3802,9 +3831,9 @@ export default function LrsysPortal() {
                           const isSelected = selectedRowIds.has(r.id);
                           const globalIdx = (currentPage - 1) * (pageSize === 'all' ? filteredRecords.length : pageSize) + localIdx;
 
-                          // Check if there is a sequential gap before this row when ascending sort is active
+                          // Check if there is a sequential gap before this row when ascending sort is active and a specific date tab is selected
                           let gapBefore: { prevNum: number; currNum: number; count: number; missingList: string[] } | null = null;
-                          if (isStampAscending && globalIdx > 0) {
+                          if (isStampAscending && selectedDate && globalIdx > 0) {
                             const prevR = filteredRecords[globalIdx - 1];
                             const parseNum = (s?: string) => {
                               if (!s) return null;
@@ -3842,7 +3871,7 @@ export default function LrsysPortal() {
                                           <AlertTriangle className="h-3.5 w-3.5" />
                                         </span>
                                         <span className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
-                                          Missing Stamp Duty No:
+                                          Missing Stamp Duty No ({formatShortDateDisplay(selectedDate)}):
                                         </span>
                                         {gapBefore.missingList.length > 0 ? (
                                           <div className="flex flex-wrap items-center gap-1.5">
@@ -6130,10 +6159,12 @@ export default function LrsysPortal() {
               </div>
               <div>
                 <DialogTitle className="text-lg font-bold text-foreground">
-                  Stamp Duty Sequence Audit
+                  Stamp Duty Sequence Audit {selectedDate ? `— ${formatLongDateDisplay(selectedDate)}` : ''}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Audit report of skipped or missing counter stamp numbers in sequential ascending order.
+                  {selectedDate
+                    ? `Physical register audit for declarations uploaded on ${formatLongDateDisplay(selectedDate)}. Showing only missing stamps for this selected day.`
+                    : `Audit report of skipped or missing counter stamp numbers in sequential ascending order.`}
                 </DialogDescription>
               </div>
             </div>
@@ -6163,7 +6194,7 @@ export default function LrsysPortal() {
                   {filteredRecords.length}
                 </div>
                 <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
-                  Audited Declarations
+                  {selectedDate ? `Declarations (${formatShortDateDisplay(selectedDate)})` : 'Audited Declarations'}
                 </div>
               </div>
             </div>
