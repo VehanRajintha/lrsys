@@ -348,6 +348,7 @@ export function StatisticsAnalyticsDeck({
   const [trajectoryMode, setTrajectoryMode] = useState<TrajectoryViewMode>('velocity');
   const [pieMode, setPieMode] = useState<'commodity' | 'fidelity'>('commodity');
   const [hoveredPieLabel, setHoveredPieLabel] = useState<string | null>(null);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
 
   // Dynamic Cursor-Following Tooltip Tracking
   const lineChartContainerRef = useRef<HTMLDivElement>(null);
@@ -825,35 +826,40 @@ export function StatisticsAnalyticsDeck({
     }
   }, [filteredRecords, pieMode]);
 
-  // Export Daily Breakdown to CSV
-  const handleExportCSV = () => {
-    if (dailyData.length === 0) return;
-    const headers = [
-      'Date',
-      'Daily CusDec Ingested',
-      'Cumulative Run-Up Total',
-      'Day-over-Day Delta',
-      'Day Delta (%)',
-      'Mean OCR Accuracy (%)',
-    ];
-    const rows = dailyData.map((d) => [
-      d.date,
-      d.total,
-      d.cumulative,
-      d.dayDelta >= 0 ? `+${d.dayDelta}` : `${d.dayDelta}`,
-      `${d.dayDeltaPct}%`,
-      `${d.avgConfidence}%`,
-    ]);
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `CusDec_Statistics_${startDate}_to_${endDate}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Export Formatted Multi-Chart Analytics Workbook (.xlsx)
+  const handleExportExcel = async () => {
+    if (dailyData.length === 0 || isExportingExcel) return;
+    setIsExportingExcel(true);
+    try {
+      const params = new URLSearchParams({
+        basis: dateBasis,
+        preset: activePreset,
+        startDate,
+        endDate,
+        trajectoryMode,
+        pieMode,
+      });
+      const response = await fetch(`/api/statistics/export/excel?${params.toString()}`, {
+        method: 'GET',
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || 'Failed to generate Excel analytics report');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `CusDec_Statistics_Report_${startDate}_to_${endDate}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Statistics Excel download error:', err);
+    } finally {
+      setIsExportingExcel(false);
+    }
   };
 
   // SVG Line Chart Coordinate Generator for the Cumulative Line Up Chart
@@ -937,11 +943,17 @@ export function StatisticsAnalyticsDeck({
             <Button
               variant="outline"
               size="sm"
-              onClick={handleExportCSV}
-              className="h-10 px-4 gap-2 rounded-xl border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/70 text-xs font-semibold cursor-pointer shadow-xs"
+              onClick={handleExportExcel}
+              disabled={isExportingExcel || dailyData.length === 0}
+              className="h-10 px-4 gap-2 rounded-xl border-emerald-500/30 dark:border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/15 dark:hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-xs font-bold cursor-pointer shadow-xs transition-all"
+              title="Export Executive Multi-Chart Analytics Report (.xlsx)"
             >
-              <Download className="w-4 h-4 text-cyan-500" />
-              <span>Export CSV</span>
+              {isExportingExcel ? (
+                <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+              )}
+              <span>{isExportingExcel ? 'Building Excel Report...' : 'Export Excel'}</span>
             </Button>
           </div>
         </div>
