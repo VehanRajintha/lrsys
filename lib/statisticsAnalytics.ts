@@ -8,9 +8,13 @@ export type PieMode = 'commodity' | 'fidelity';
 export interface DailyStatRow {
   date: string;
   total: number;
+  flagged: number;
+  bothMatched: number;
+  consigneeOnly: number;
   confidenceSum: number;
   avgConfidence: number;
   cumulative: number;
+  flaggedCumulative: number;
   dayDelta: number;
   dayDeltaPct: number;
 }
@@ -248,15 +252,40 @@ export function computeStatisticsSummary(params: {
   }
 
   // Daily breakdown
-  const dayMap = new Map<string, { date: string; total: number; confidenceSum: number }>();
+  const dayMap = new Map<
+    string,
+    {
+      date: string;
+      total: number;
+      flagged: number;
+      bothMatched: number;
+      consigneeOnly: number;
+      confidenceSum: number;
+    }
+  >();
   filteredRecords.forEach((r) => {
     const d = parseRecordDate(r, dateBasis);
     if (!d || d === 'Unassigned' || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
     if (!dayMap.has(d)) {
-      dayMap.set(d, { date: d, total: 0, confidenceSum: 0 });
+      dayMap.set(d, {
+        date: d,
+        total: 0,
+        flagged: 0,
+        bothMatched: 0,
+        consigneeOnly: 0,
+        confidenceSum: 0,
+      });
     }
     const item = dayMap.get(d)!;
     item.total++;
+    if (r.tallyFlag?.isFlagged) {
+      item.flagged++;
+      if (r.tallyFlag.matchType === 'CONSIGNEE_AND_DECLARANT') {
+        item.bothMatched++;
+      } else {
+        item.consigneeOnly++;
+      }
+    }
     item.confidenceSum += Number(r.confidence || 0);
   });
 
@@ -268,14 +297,17 @@ export function computeStatisticsSummary(params: {
     .sort((a, b) => a.date.localeCompare(b.date));
 
   let runningTotal = 0;
+  let runningFlaggedTotal = 0;
   const dailyData: DailyStatRow[] = dayList.map((item, idx) => {
     runningTotal += item.total;
+    runningFlaggedTotal += item.flagged;
     const prevDayTotal = idx > 0 ? dayList[idx - 1].total : item.total;
     const dayDelta = item.total - prevDayTotal;
     const dayDeltaPct = prevDayTotal > 0 ? Math.round((dayDelta / prevDayTotal) * 100) : 0;
     return {
       ...item,
       cumulative: runningTotal,
+      flaggedCumulative: runningFlaggedTotal,
       dayDelta,
       dayDeltaPct,
     };

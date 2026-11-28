@@ -3,12 +3,22 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from 'react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
-import { CusDecRecord, Settings, QueueStatus, Stats, TallyResult, TallyRecord } from '@/lib/types';
+import {
+  CusDecRecord,
+  Settings,
+  QueueStatus,
+  Stats,
+  TallyResult,
+  TallyRecord,
+  OrganizationRegistryMeta,
+  RegisteredOrganizationEntry,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 // shadcn/ui components
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -103,6 +113,10 @@ import {
   MessageCircle,
   Calendar as CalendarIcon,
   CalendarDays,
+  Flag,
+  Building2,
+  Database,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 import { SafeUser, UserRole, ROLE_CONFIGS } from '@/lib/authTypes';
@@ -185,6 +199,16 @@ export default function LrsysPortal() {
                           currentUser?.role === 'DC' || 
                           currentUser?.role === 'DEV';
 
+  // Strict Inspector of Customs (IC) exclusive UI controls: Upload Images, Import ZIP, and Stamp Duty sequence controls
+  const isICRole = currentUser?.role === 'IC';
+
+  useEffect(() => {
+    if (!isICRole) {
+      setIsStampAscending(false);
+      setIsMissingAuditModalOpen(false);
+    }
+  }, [isICRole]);
+
   // Load authenticated user session
   useEffect(() => {
     fetch('/api/auth/session')
@@ -227,6 +251,17 @@ export default function LrsysPortal() {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [isStampAscending, setIsStampAscending] = useState(false);
   const [isMissingAuditModalOpen, setIsMissingAuditModalOpen] = useState(false);
+
+  // Organization Registry Tally Flagging State (Declarations Tab)
+  const [isTallyFlagEnabled, setIsTallyFlagEnabled] = useState(false);
+  const [isFlaggedOnlyFilter, setIsFlaggedOnlyFilter] = useState(false);
+  const [flagTierFilter, setFlagTierFilter] = useState<'ALL' | 'CONSIGNEE_ONLY' | 'CONSIGNEE_AND_DECLARANT'>('ALL');
+  const [orgRegistryMeta, setOrgRegistryMeta] = useState<OrganizationRegistryMeta | null>(null);
+  const [orgRegistryPreview, setOrgRegistryPreview] = useState<RegisteredOrganizationEntry[]>([]);
+  const [orgRegistrySearch, setOrgRegistrySearch] = useState('');
+  const [isUploadingOrgRegistry, setIsUploadingOrgRegistry] = useState(false);
+  const orgDialogRef = useRef<HTMLDialogElement>(null);
+  const orgUploadInputRef = useRef<HTMLInputElement>(null);
 
   // Calendar & Day-by-Day Date State (Strictly upload / ingestion date)
   const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD or empty for all days
@@ -616,6 +651,7 @@ export default function LrsysPortal() {
     applyTheme(savedTheme);
 
     fetchRecords();
+    fetchOrganizationRegistry();
     fetchSettings();
     fetchSystemInfo();
     fetchStorageStats();
@@ -788,6 +824,85 @@ export default function LrsysPortal() {
     }
   };
 
+  const fetchOrganizationRegistry = async (search = '') => {
+    try {
+      const q = search ? `?q=${encodeURIComponent(search)}&limit=50` : '?limit=50';
+      const res = await fetch(`/api/organizations${q}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.meta) setOrgRegistryMeta(data.meta);
+        if (Array.isArray(data.preview)) setOrgRegistryPreview(data.preview);
+      }
+    } catch (err) {
+      console.error('Failed to load organization registry metadata:', err);
+    }
+  };
+
+  const handleUploadOrgRegistryFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!canManageCusDec) {
+      showToast('Action Restricted', 'warning', 'Updating the organization registry is restricted to authorized officers.');
+      return;
+    }
+
+    setIsUploadingOrgRegistry(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/organizations', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to upload organization Excel');
+      }
+      if (data.meta) setOrgRegistryMeta(data.meta);
+      if (Array.isArray(data.preview)) setOrgRegistryPreview(data.preview);
+      await fetchRecords(false);
+      setIsTallyFlagEnabled(true);
+      showToast(
+        `Registry updated: ${data.meta?.uniqueOrganizations?.toLocaleString() || 0} orgs`,
+        'success',
+        `${data.flaggedSummary?.flaggedCount ?? 0} declarations flagged in ledger`
+      );
+    } catch (err: any) {
+      showToast('Registry Import Failed', 'error', err.message);
+    } finally {
+      setIsUploadingOrgRegistry(false);
+    }
+  };
+
+  useEffect(() => {
+    const dialog = orgDialogRef.current;
+    if (!dialog || 'closedBy' in HTMLDialogElement.prototype) return;
+
+    const outside = (ev: PointerEvent) => {
+      const r = dialog.getBoundingClientRect();
+      return ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom;
+    };
+
+    let pressedOutside = false;
+    const onDown = (ev: PointerEvent) => {
+      pressedOutside = outside(ev);
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (pressedOutside && outside(ev)) {
+        dialog.close();
+      }
+      pressedOutside = false;
+    };
+
+    dialog.addEventListener('pointerdown', onDown);
+    dialog.addEventListener('pointerup', onUp);
+    return () => {
+      dialog.removeEventListener('pointerdown', onDown);
+      dialog.removeEventListener('pointerup', onUp);
+    };
+  }, []);
+
   const fetchSettings = async () => {
     try {
       const res = await fetch('/api/settings');
@@ -906,11 +1021,12 @@ export default function LrsysPortal() {
   // Defer search term updates to keep input typing at 60fps on low-end hardware
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
-  const filteredRecords = useMemo(() => {
+  // Base records matching active day, status tab, and search term (before Flagged-Only narrowing)
+  const baseScopedRecords = useMemo(() => {
     const q = deferredSearchTerm.trim().toLowerCase();
     const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
 
-    const list = records.filter(r => {
+    return records.filter(r => {
       // 0. Calendar / Day-by-Day filter (strictly based on system upload date)
       if (selectedDate) {
         const recordDate = parseRecordDate(r, 'created');
@@ -936,17 +1052,75 @@ export default function LrsysPortal() {
         const dTin = (r.declarantTIN || '').toLowerCase();
         const filename = (r.filename || '').toLowerCase();
         const origName = (r.originalName || '').toLowerCase();
+        const matchedOrg = (r.tallyFlag?.matchedConsigneeOrg || '').toLowerCase();
 
-        const corpus = `${stamp} ${ref} ${consignee} ${declarant} ${bl} ${goods} ${date} ${cTin} ${dTin} ${filename} ${origName}`;
+        const corpus = `${stamp} ${ref} ${consignee} ${declarant} ${bl} ${goods} ${date} ${cTin} ${dTin} ${filename} ${origName} ${matchedOrg}`;
         const matchesAll = tokens.every(token => corpus.includes(token));
         if (!matchesAll) return false;
       }
 
       return true;
     });
+  }, [records, filter, deferredSearchTerm, duplicateIdSet, selectedDate]);
 
-    // 3. Smooth Stamp Duty Number Ascending Sort (when iOS toggle switch is enabled)
-    if (isStampAscending) {
+  // Live Registry Flagging Summary across active view
+  const tallyFlagMetrics = useMemo(() => {
+    let flaggedCount = 0;
+    let bothCount = 0;
+    let consigneeOnlyCount = 0;
+    let declarantOnlyExcludedCount = 0;
+
+    for (const r of baseScopedRecords) {
+      if (r.tallyFlag?.isFlagged) {
+        flaggedCount++;
+        if (r.tallyFlag.matchType === 'CONSIGNEE_AND_DECLARANT') {
+          bothCount++;
+        } else {
+          consigneeOnlyCount++;
+        }
+      } else if (r.tallyFlag?.declarantMatched) {
+        declarantOnlyExcludedCount++;
+      }
+    }
+
+    const activeExportCount =
+      flagTierFilter === 'CONSIGNEE_AND_DECLARANT'
+        ? bothCount
+        : flagTierFilter === 'CONSIGNEE_ONLY'
+          ? consigneeOnlyCount
+          : flaggedCount;
+
+    return {
+      flaggedCount,
+      bothCount,
+      consigneeOnlyCount,
+      declarantOnlyExcludedCount,
+      activeExportCount,
+    };
+  }, [baseScopedRecords, flagTierFilter]);
+
+  const buildFlaggedExportUrl = useCallback(() => {
+    const params = new URLSearchParams();
+    if (selectedDate) params.set('date', selectedDate);
+    if (filter && filter !== 'ALL') params.set('filter', filter);
+    if (searchTerm.trim()) params.set('search', searchTerm.trim());
+    if (isTallyFlagEnabled && flagTierFilter !== 'ALL') params.set('flagTier', flagTierFilter);
+    const qs = params.toString();
+    return qs ? `/api/export/flagged?${qs}` : '/api/export/flagged';
+  }, [selectedDate, filter, searchTerm, isTallyFlagEnabled, flagTierFilter]);
+
+  const filteredRecords = useMemo(() => {
+    const list =
+      isTallyFlagEnabled && isFlaggedOnlyFilter
+        ? baseScopedRecords.filter(r => {
+            if (!r.tallyFlag?.isFlagged) return false;
+            if (flagTierFilter !== 'ALL' && r.tallyFlag.matchType !== flagTierFilter) return false;
+            return true;
+          })
+        : baseScopedRecords;
+
+    // 3. Smooth Stamp Duty Number Ascending Sort (IC role only when iOS toggle switch is enabled)
+    if (isICRole && isStampAscending) {
       return [...list].sort((a, b) => {
         const getNum = (s?: string) => {
           if (!s) return Infinity;
@@ -963,12 +1137,12 @@ export default function LrsysPortal() {
     }
 
     return list;
-  }, [records, filter, deferredSearchTerm, duplicateIdSet, isStampAscending, selectedDate]);
+  }, [baseScopedRecords, isTallyFlagEnabled, isFlaggedOnlyFilter, flagTierFilter, isICRole, isStampAscending]);
 
-  // Reset pagination to first page when search query, filter, date, or sorting changes
+  // Reset pagination to first page when search query, filter, date, tally mode, or sorting changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearchTerm, filter, selectedDate, isStampAscending]);
+  }, [deferredSearchTerm, filter, selectedDate, isStampAscending, isTallyFlagEnabled, isFlaggedOnlyFilter, flagTierFilter]);
 
   // Total pages calculation
   const totalPages = useMemo(() => {
@@ -976,9 +1150,9 @@ export default function LrsysPortal() {
     return Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   }, [filteredRecords.length, pageSize]);
 
-  // Audit missing Stamp Duty Numbers in sequential order (active when isStampAscending is true and scoped to selected date)
+  // Audit missing Stamp Duty Numbers in sequential order (IC role only when isStampAscending is true and scoped to selected date)
   const missingStampAudit = useMemo(() => {
-    if (!isStampAscending) {
+    if (!isICRole || !isStampAscending) {
       return { totalMissingCount: 0, gapsCount: 0, gaps: [], summaryText: '', allMissingFlat: [] as string[], isAllDaysNotice: false };
     }
 
@@ -1070,7 +1244,7 @@ export default function LrsysPortal() {
       allMissingFlat,
       isAllDaysNotice: false
     };
-  }, [isStampAscending, filteredRecords, selectedDate]);
+  }, [isICRole, isStampAscending, filteredRecords, selectedDate]);
 
   // Ensure current page does not exceed total pages
   useEffect(() => {
@@ -1589,8 +1763,8 @@ export default function LrsysPortal() {
   };
 
   const handleZipFile = async (zipFile: File) => {
-    if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'ZIP import is restricted to authorized customs clearance.');
+    if (!isICRole) {
+      showToast('Action Restricted', 'warning', 'ZIP import is restricted to Inspector of Customs (IC) role.');
       return;
     }
     try {
@@ -1628,8 +1802,8 @@ export default function LrsysPortal() {
 
   const handleFileUpload = async (files: FileList | null, endpoint: string, fieldName: string) => {
     if (!files || files.length === 0) return;
-    if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to authorized customs clearance.');
+    if (!isICRole) {
+      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to Inspector of Customs (IC) role.');
       return;
     }
 
@@ -1676,7 +1850,7 @@ export default function LrsysPortal() {
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
-    if (!canManageCusDec) return;
+    if (!isICRole) return;
     if (isInsideChatWidget(e)) return;
     e.preventDefault();
     e.stopPropagation();
@@ -1687,7 +1861,7 @@ export default function LrsysPortal() {
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
-    if (!canManageCusDec) return;
+    if (!isICRole) return;
     if (isInsideChatWidget(e)) return;
     e.preventDefault();
     e.stopPropagation();
@@ -1699,7 +1873,7 @@ export default function LrsysPortal() {
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-    if (!canManageCusDec) return;
+    if (!isICRole) return;
     if (isInsideChatWidget(e)) return;
     e.preventDefault();
     e.stopPropagation();
@@ -1714,8 +1888,8 @@ export default function LrsysPortal() {
     // Defense-in-depth: Never ingest files dropped into the chat widget as declarations
     if (isInsideChatWidget(e)) return;
 
-    if (!canManageCusDec) {
-      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to authorized customs clearance.');
+    if (!isICRole) {
+      showToast('Action Restricted', 'warning', 'Document ingestion is restricted to Inspector of Customs (IC) role.');
       return;
     }
 
@@ -3169,27 +3343,31 @@ export default function LrsysPortal() {
                   </svg>
                 </div>
 
-                {/* Ingestion & ZIP Inputs (hidden) */}
-                <input
-                  type="file"
-                  ref={uploadInputRef}
-                  multiple
-                  accept="image/*,application/pdf"
-                  className="hidden"
-                  onChange={e => handleFileUpload(e.target.files, '/api/upload', 'documents')}
-                />
-                <input
-                  type="file"
-                  ref={zipInputRef}
-                  accept=".zip"
-                  className="hidden"
-                  onChange={e => {
-                    if (e.target.files && e.target.files[0]) {
-                      handleZipFile(e.target.files[0]);
-                      e.target.value = '';
-                    }
-                  }}
-                />
+                {/* Ingestion & ZIP Inputs (IC role only) */}
+                {isICRole && (
+                  <>
+                    <input
+                      type="file"
+                      ref={uploadInputRef}
+                      multiple
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={e => handleFileUpload(e.target.files, '/api/upload', 'documents')}
+                    />
+                    <input
+                      type="file"
+                      ref={zipInputRef}
+                      accept=".zip"
+                      className="hidden"
+                      onChange={e => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleZipFile(e.target.files[0]);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </>
+                )}
 
                 <div className="relative z-10 flex flex-col gap-4">
                   {/* Hero Title & Subtitle */}
@@ -3206,9 +3384,9 @@ export default function LrsysPortal() {
                     </p>
                   </div>
 
-                  {/* Primary Ingestion Pill Action Buttons */}
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
-                    {canManageCusDec && (
+                  {/* Primary Ingestion Pill Action Buttons (IC role only) */}
+                  {isICRole && (
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
                       <Button
                         type="button"
                         variant="cyanGradient"
@@ -3219,9 +3397,7 @@ export default function LrsysPortal() {
                         <Upload className="w-4 h-4" />
                         <span>Upload Images</span>
                       </Button>
-                    )}
 
-                    {canManageCusDec && (
                       <Button
                         type="button"
                         variant="tealGradient"
@@ -3232,8 +3408,8 @@ export default function LrsysPortal() {
                         <FolderArchive className="w-4 h-4" />
                         <span>Import ZIP</span>
                       </Button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3532,8 +3708,9 @@ export default function LrsysPortal() {
                 onSelectDate={setSelectedDate}
                 records={records}
                 totalFilteredRecordsCount={filteredRecords.length}
-                isStampAscending={isStampAscending}
+                isStampAscending={isICRole && isStampAscending}
                 onOpenMissingAuditModal={() => {
+                  if (!isICRole) return;
                   setIsStampAscending(true);
                   setIsMissingAuditModalOpen(true);
                 }}
@@ -3566,6 +3743,99 @@ export default function LrsysPortal() {
                           <span>Export CSV{selectedDate ? ` (${filteredRecords.length})` : ''}</span>
                         </a>
                       </Button>
+
+                      {/* Organization Registry Tally Toggle Button */}
+                      <button
+                        type="button"
+                        aria-pressed={isTallyFlagEnabled}
+                        onClick={() => {
+                          setIsTallyFlagEnabled(prev => {
+                            const next = !prev;
+                            if (!next) {
+                              setIsFlaggedOnlyFilter(false);
+                              setFlagTierFilter('ALL');
+                            }
+                            return next;
+                          });
+                        }}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95',
+                          isTallyFlagEnabled
+                            ? 'bg-gradient-to-r from-rose-600 to-fuchsia-600 text-white border-rose-500/80 shadow-md shadow-rose-500/25'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-[#070b14]/60 hover:bg-rose-50/70 dark:hover:bg-rose-950/30 hover:border-rose-500/40 text-slate-700 dark:text-slate-200'
+                        )}
+                        title={
+                          isTallyFlagEnabled
+                            ? 'Tally Flagging ACTIVE — matching Consignee or Consignee+Declarant against stored Organization Registry. Click to turn off.'
+                            : `Enable Tally Flagging against ${(orgRegistryMeta?.uniqueOrganizations ?? 3534).toLocaleString()} stored Organizations`
+                        }
+                      >
+                        <Flag className={cn('w-3.5 h-3.5', isTallyFlagEnabled ? 'text-white fill-white/25' : 'text-rose-500')} />
+                        <span>{isTallyFlagEnabled ? 'Tally: ON' : 'Tally Flag'}</span>
+                        <span
+                          className={cn(
+                            'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold',
+                            isTallyFlagEnabled
+                              ? 'bg-white/20 text-white'
+                              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25'
+                          )}
+                        >
+                          {tallyFlagMetrics.flaggedCount}
+                        </span>
+                      </button>
+
+                      {/* Separate Export Flagged Entries as Excel Button */}
+                      {tallyFlagMetrics.activeExportCount > 0 ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className={cn(
+                            'gap-1.5 h-9 rounded-lg text-xs font-semibold transition-all shadow-xs',
+                            isTallyFlagEnabled
+                              ? 'border-rose-500/60 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 dark:border-rose-500/50'
+                              : 'border-slate-200 dark:border-slate-800 dark:bg-[#070b14]/60 hover:border-rose-500/40 text-slate-700 dark:text-slate-200'
+                          )}
+                        >
+                          <a
+                            href={buildFlaggedExportUrl()}
+                            download
+                            title={`Export ONLY the ${tallyFlagMetrics.activeExportCount} Flagged CusDec entries as Excel (.xlsx) — excludes Declarant-only matches`}
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5 text-rose-500" />
+                            <span>Export Flagged Excel ({tallyFlagMetrics.activeExportCount})</span>
+                          </a>
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled
+                          className="gap-1.5 h-9 rounded-lg border-slate-200 dark:border-slate-800 text-xs opacity-50"
+                          title="No Consignee-matched flagged declarations in current view"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Export Flagged Excel (0)</span>
+                        </Button>
+                      )}
+
+                      {/* Stored Organization Excel Registry Inspector/Uploader Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          fetchOrganizationRegistry(orgRegistrySearch);
+                          orgDialogRef.current?.showModal();
+                        }}
+                        className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#070b14]/60 hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:border-cyan-500/40 text-slate-600 dark:text-slate-300 text-xs font-medium transition-all cursor-pointer"
+                        title="View or update stored Organization Excel Registry in memory & VPS disk"
+                      >
+                        <Database className="w-3.5 h-3.5 text-cyan-500" />
+                        <span className="hidden xl:inline">Org Registry</span>
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                          {(orgRegistryMeta?.uniqueOrganizations ?? 3534).toLocaleString()}
+                        </span>
+                      </button>
 
                       {selectedRowIds.size > 0 && canManageCusDec && (
                         <Button
@@ -3610,8 +3880,8 @@ export default function LrsysPortal() {
                         </div>
                       )}
 
-                      {/* Sequence Audit Alert Pill */}
-                      {isStampAscending && (
+                      {/* Sequence Audit Alert Pill (IC role only) */}
+                      {isICRole && isStampAscending && (
                         !selectedDate ? (
                           <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-700 dark:text-cyan-300 text-xs font-medium shadow-2xs">
                             <Layers className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
@@ -3681,6 +3951,93 @@ export default function LrsysPortal() {
                       )}
                     </div>
                   </div>
+
+                  {/* Active Tally Flag Bar */}
+                  {isTallyFlagEnabled && (
+                    <div className="mt-3 pt-3 border-t border-slate-200/70 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                          <Flag className="w-3.5 h-3.5 fill-rose-500/20" />
+                          <span>Tally Flag Active</span>
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsFlaggedOnlyFilter(prev => !prev);
+                            if (isFlaggedOnlyFilter) setFlagTierFilter('ALL');
+                          }}
+                          className={cn(
+                            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer',
+                            isFlaggedOnlyFilter
+                              ? 'bg-rose-600 text-white border-rose-500 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-900/70 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-rose-500/40'
+                          )}
+                        >
+                          <span>{isFlaggedOnlyFilter ? 'Showing Flagged Only' : 'Show Flagged Only'}</span>
+                          <span className={cn('font-mono text-[10px] px-1.5 rounded-full', isFlaggedOnlyFilter ? 'bg-white/20 text-white' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400')}>
+                            {tallyFlagMetrics.flaggedCount}
+                          </span>
+                        </button>
+
+                        {isFlaggedOnlyFilter && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setFlagTierFilter('ALL')}
+                              className={cn(
+                                'px-2.5 py-1 rounded-full text-[11px] font-semibold border cursor-pointer transition-colors',
+                                flagTierFilter === 'ALL'
+                                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent'
+                                  : 'border-slate-200 dark:border-slate-800 text-muted-foreground hover:text-foreground'
+                              )}
+                            >
+                              All ({tallyFlagMetrics.flaggedCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFlagTierFilter('CONSIGNEE_AND_DECLARANT')}
+                              className={cn(
+                                'px-2.5 py-1 rounded-full text-[11px] font-semibold border cursor-pointer transition-colors',
+                                flagTierFilter === 'CONSIGNEE_AND_DECLARANT'
+                                  ? 'bg-fuchsia-600 text-white border-fuchsia-500'
+                                  : 'border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-500/20'
+                              )}
+                            >
+                              Consignee + Declarant ({tallyFlagMetrics.bothCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFlagTierFilter('CONSIGNEE_ONLY')}
+                              className={cn(
+                                'px-2.5 py-1 rounded-full text-[11px] font-semibold border cursor-pointer transition-colors',
+                                flagTierFilter === 'CONSIGNEE_ONLY'
+                                  ? 'bg-rose-600 text-white border-rose-500'
+                                  : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20'
+                              )}
+                            >
+                              Consignee Only ({tallyFlagMetrics.consigneeOnlyCount})
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <span className="px-2 py-0.5 rounded-md bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300 border border-fuchsia-500/25 font-medium">
+                          Both Matched: <strong className="font-mono">{tallyFlagMetrics.bothCount}</strong>
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/25 font-medium">
+                          Consignee Only: <strong className="font-mono">{tallyFlagMetrics.consigneeOnlyCount}</strong>
+                        </span>
+                        <span
+                          className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/70"
+                          title="Entries where ONLY Declarant matched the Excel list are intentionally NOT flagged"
+                        >
+                          Declarant-Only Excluded: <strong className="font-mono">{tallyFlagMetrics.declarantOnlyExcludedCount}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <Separator />
@@ -3690,39 +4047,56 @@ export default function LrsysPortal() {
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-10 text-center">
-                          <input
-                            type="checkbox"
-                            checked={filteredRecords.length > 0 && selectedRowIds.size === filteredRecords.length}
-                            onChange={e => handleSelectAll(e.target.checked)}
-                            className="rounded border-border cursor-pointer"
-                          />
+                        <TableHead className="w-12 px-1 text-center">
+                          {(() => {
+                            const hasRows = filteredRecords.length > 0;
+                            const allSelected = hasRows && filteredRecords.every(r => selectedRowIds.has(r.id));
+                            const someSelected = hasRows && !allSelected && filteredRecords.some(r => selectedRowIds.has(r.id));
+                            return (
+                              <Checkbox
+                                checked={allSelected}
+                                indeterminate={someSelected}
+                                disabled={!hasRows}
+                                onChange={e => handleSelectAll(e.target.checked)}
+                                aria-label="Select all declarations"
+                                title={
+                                  !hasRows
+                                    ? 'No declarations to select'
+                                    : allSelected
+                                      ? 'Deselect all declarations'
+                                      : 'Select all declarations'
+                                }
+                              />
+                            );
+                          })()}
                         </TableHead>
-                        <TableHead className="w-48 whitespace-nowrap select-none">
+                        <TableHead className={cn(isICRole ? "w-48" : "w-32", "whitespace-nowrap select-none")}>
                           <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <span className="font-semibold text-foreground whitespace-nowrap text-xs">Stamp Duty No</span>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={isStampAscending}
-                              onClick={() => setIsStampAscending(prev => !prev)}
-                              className={cn(
-                                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none shadow-xs select-none",
-                                isStampAscending
-                                  ? "bg-[#34c759] hover:bg-[#30b753]"
-                                  : "bg-[#39393d] hover:bg-[#48484a]"
-                              )}
-                              title={isStampAscending ? "Sorted Ascending (1 → 9). Click to reset order." : "Click to sort by Stamp Duty No (Ascending order)"}
-                            >
-                              <span
-                                aria-hidden="true"
+                            {isICRole && (
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={isStampAscending}
+                                onClick={() => setIsStampAscending(prev => !prev)}
                                 className={cn(
-                                  "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition-transform duration-200 ease-in-out",
-                                  isStampAscending ? "translate-x-4" : "translate-x-0"
+                                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none shadow-xs select-none",
+                                  isStampAscending
+                                    ? "bg-[#34c759] hover:bg-[#30b753]"
+                                    : "bg-[#39393d] hover:bg-[#48484a]"
                                 )}
-                              />
-                            </button>
-                            {isStampAscending && selectedDate && missingStampAudit.totalMissingCount > 0 && (
+                                title={isStampAscending ? "Sorted Ascending (1 → 9). Click to reset order." : "Click to sort by Stamp Duty No (Ascending order)"}
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className={cn(
+                                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition-transform duration-200 ease-in-out",
+                                    isStampAscending ? "translate-x-4" : "translate-x-0"
+                                  )}
+                                />
+                              </button>
+                            )}
+                            {isICRole && isStampAscending && selectedDate && missingStampAudit.totalMissingCount > 0 && (
                               <button
                                 type="button"
                                 onClick={() => setIsMissingAuditModalOpen(true)}
@@ -3826,7 +4200,9 @@ export default function LrsysPortal() {
                                 <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
                                 <p className="font-medium">No customs declarations found</p>
                                 <p className="text-xs text-muted-foreground mt-0.5">
-                                  Upload document images or import a ZIP archive above.
+                                  {isICRole
+                                    ? 'Upload document images or import a ZIP archive above.'
+                                    : 'No customs declarations have been logged in this ledger yet.'}
                                 </p>
                               </div>
                             )}
@@ -3837,9 +4213,9 @@ export default function LrsysPortal() {
                           const isSelected = selectedRowIds.has(r.id);
                           const globalIdx = (currentPage - 1) * (pageSize === 'all' ? filteredRecords.length : pageSize) + localIdx;
 
-                          // Check if there is a sequential gap before this row when ascending sort is active and a specific date tab is selected
+                          // Check if there is a sequential gap before this row when IC ascending sort is active and a specific date tab is selected
                           let gapBefore: { prevNum: number; currNum: number; count: number; missingList: string[] } | null = null;
-                          if (isStampAscending && selectedDate && globalIdx > 0) {
+                          if (isICRole && isStampAscending && selectedDate && globalIdx > 0) {
                             const prevR = filteredRecords[globalIdx - 1];
                             const parseNum = (s?: string) => {
                               if (!s) return null;
@@ -3862,6 +4238,10 @@ export default function LrsysPortal() {
                               gapBefore = { prevNum, currNum, count, missingList };
                             }
                           }
+
+                          const isFlaggedRow = isTallyFlagEnabled && Boolean(r.tallyFlag?.isFlagged);
+                          const isBothMatchedFlag =
+                            isFlaggedRow && r.tallyFlag?.matchType === 'CONSIGNEE_AND_DECLARANT';
 
                           return (
                             <React.Fragment key={r.id}>
@@ -3910,15 +4290,23 @@ export default function LrsysPortal() {
                                 </TableRow>
                               )}
                               <TableRow
+                                data-state={isSelected ? 'selected' : undefined}
                                 onClick={() => openInspectionModal(r)}
-                                className="cursor-pointer hover:bg-muted/50 data-[state=selected]:bg-muted/70 transition-all duration-150 animate-in fade-in-50"
+                                className={cn(
+                                  'cursor-pointer transition-all duration-150 animate-in fade-in-50',
+                                  isBothMatchedFlag
+                                    ? 'border-l-4 border-l-fuchsia-500 bg-fuchsia-500/[0.06] dark:bg-fuchsia-500/[0.09] hover:bg-fuchsia-500/[0.11]'
+                                    : isFlaggedRow
+                                      ? 'border-l-4 border-l-rose-500 bg-rose-500/[0.06] dark:bg-rose-500/[0.09] hover:bg-rose-500/[0.11]'
+                                      : 'hover:bg-muted/50',
+                                  'data-[state=selected]:bg-cyan-500/[0.07] dark:data-[state=selected]:bg-cyan-500/[0.11] data-[state=selected]:hover:bg-cyan-500/[0.11] dark:data-[state=selected]:hover:bg-cyan-500/[0.16]'
+                                )}
                               >
-                              <TableCell className="text-center" onClick={e => e.stopPropagation()}>
-                                <input
-                                  type="checkbox"
+                              <TableCell className="w-12 px-1 py-1 text-center" onClick={e => e.stopPropagation()}>
+                                <Checkbox
                                   checked={isSelected}
                                   onChange={e => handleRowCheck(r.id, e.target.checked)}
-                                  className="rounded border-border cursor-pointer"
+                                  aria-label={`Select declaration ${r.greenStampNumber || r.customsRefNumber || r.id}`}
                                 />
                               </TableCell>
 
@@ -3932,12 +4320,43 @@ export default function LrsysPortal() {
                                 {r.customsRefNumber || '—'}
                               </TableCell>
 
-                              <TableCell className="font-medium text-xs max-w-xs truncate">
-                                {r.consigneeName || 'UNKNOWN'}
+                              <TableCell className="font-medium text-xs max-w-xs">
+                                <div className="truncate" title={r.consigneeName || 'UNKNOWN'}>
+                                  {r.consigneeName || 'UNKNOWN'}
+                                </div>
+                                {isFlaggedRow && r.tallyFlag?.matchedConsigneeOrg && (
+                                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                                    <span
+                                      className={cn(
+                                        'inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[10px] font-semibold border',
+                                        isBothMatchedFlag
+                                          ? 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/35'
+                                          : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/35'
+                                      )}
+                                      title={`Matched Registry Org: ${r.tallyFlag.matchedConsigneeOrg}${r.tallyFlag.consigneeCertCount ? ` (${r.tallyFlag.consigneeCertCount} cert${r.tallyFlag.consigneeCertCount > 1 ? 's' : ''})` : ''}`}
+                                    >
+                                      <Flag className="w-2.5 h-2.5 fill-current" />
+                                      <span>{isBothMatchedFlag ? 'Consignee + Declarant' : 'Consignee Flagged'}</span>
+                                    </span>
+                                  </div>
+                                )}
                               </TableCell>
 
-                              <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
-                                {r.declarantName || 'UNKNOWN'}
+                              <TableCell className="text-xs text-muted-foreground max-w-xs">
+                                <div className="truncate" title={r.declarantName || 'UNKNOWN'}>
+                                  {r.declarantName || 'UNKNOWN'}
+                                </div>
+                                {isBothMatchedFlag && r.tallyFlag?.matchedDeclarantOrg && (
+                                  <div className="mt-1 flex items-center gap-1">
+                                    <span
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[10px] font-semibold bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border border-fuchsia-500/35"
+                                      title={`Matched Registry Declarant: ${r.tallyFlag.matchedDeclarantOrg}`}
+                                    >
+                                      <Building2 className="w-2.5 h-2.5" />
+                                      <span>Org Matched</span>
+                                    </span>
+                                  </div>
+                                )}
                               </TableCell>
 
                               <TableCell className="text-center">
@@ -3961,6 +4380,20 @@ export default function LrsysPortal() {
                                     <Badge variant="outline" className="text-[10px] font-medium bg-amber-500/15 text-amber-500 dark:text-amber-400 border-amber-500/30 gap-1 px-1.5 py-0">
                                       <Copy className="w-2.5 h-2.5" />
                                       <span>Duplicate</span>
+                                    </Badge>
+                                  )}
+                                  {isFlaggedRow && (
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        'text-[10px] font-semibold gap-1 px-1.5 py-0',
+                                        isBothMatchedFlag
+                                          ? 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/35'
+                                          : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/35'
+                                      )}
+                                    >
+                                      <Flag className="w-2.5 h-2.5 fill-current" />
+                                      <span>{isBothMatchedFlag ? 'Flagged (Both)' : 'Flagged'}</span>
                                     </Badge>
                                   )}
                                 </div>
@@ -6154,9 +6587,9 @@ export default function LrsysPortal() {
       />
 
       {/* ========================================================
-           STAMP DUTY SEQUENCE AUDIT MODAL (Radix UI)
+           STAMP DUTY SEQUENCE AUDIT MODAL (Radix UI, IC role only)
            ======================================================== */}
-      <Dialog open={isMissingAuditModalOpen} onOpenChange={setIsMissingAuditModalOpen}>
+      <Dialog open={isICRole && isMissingAuditModalOpen} onOpenChange={setIsMissingAuditModalOpen}>
         <DialogContent className="max-w-2xl bg-white dark:bg-[#0b0f19] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
@@ -6278,6 +6711,180 @@ export default function LrsysPortal() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ========================================================
+           ORGANIZATION REGISTRY & TALLY FLAG ENGINE DIALOG (NATIVE)
+           ======================================================== */}
+      <dialog
+        ref={orgDialogRef}
+        aria-labelledby="org-registry-dialog-title"
+        {...({ closedby: 'any' } as any)}
+        onClose={e => {
+          (e.currentTarget as HTMLDialogElement).returnValue = '';
+        }}
+        className="m-auto w-[min(94vw,44rem)] max-h-[88vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d1527] text-foreground p-0 shadow-2xl"
+      >
+        <div className="p-5 sm:p-6 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-500">
+                  <Database className="w-4 h-4" />
+                </span>
+                <h1 id="org-registry-dialog-title" className="text-base sm:text-lg font-bold tracking-tight">
+                  Organization Registry (Server &amp; Memory Cache)
+                </h1>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Stored safely in server memory and local VPS disk (<code className="font-mono text-[11px]">data/registered_organizations.json</code>) for instant CusDec flagging.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => orgDialogRef.current?.close()}
+              aria-label="Close organization registry dialog"
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#070b14] border border-slate-200/80 dark:border-slate-800">
+              <div className="text-lg font-black font-mono text-cyan-600 dark:text-cyan-400">
+                {(orgRegistryMeta?.uniqueOrganizations ?? 0).toLocaleString()}
+              </div>
+              <div className="text-[11px] text-muted-foreground">Unique Organizations</div>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#070b14] border border-slate-200/80 dark:border-slate-800">
+              <div className="text-lg font-black font-mono text-foreground">
+                {(orgRegistryMeta?.totalCertificates ?? 0).toLocaleString()}
+              </div>
+              <div className="text-[11px] text-muted-foreground">Issued Certificates</div>
+            </div>
+            <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/25">
+              <div className="text-lg font-black font-mono text-rose-600 dark:text-rose-400">
+                {tallyFlagMetrics.flaggedCount}
+              </div>
+              <div className="text-[11px] text-muted-foreground">Flagged in View</div>
+            </div>
+            <div className="p-3 rounded-xl bg-fuchsia-500/5 border border-fuchsia-500/25">
+              <div className="text-lg font-black font-mono text-fuchsia-600 dark:text-fuchsia-400">
+                {tallyFlagMetrics.bothCount}
+              </div>
+              <div className="text-[11px] text-muted-foreground">Both Matched</div>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#070b14] border border-slate-200/80 dark:border-slate-800 text-xs space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold text-foreground">
+                Source: <span className="font-mono text-cyan-600 dark:text-cyan-400">{orgRegistryMeta?.sourceFile || 'Update_as_at_23-11-2026.xlsx'}</span>
+              </span>
+              {orgRegistryMeta?.asOfLabel && (
+                <span className="text-[11px] text-muted-foreground">{orgRegistryMeta.asOfLabel}</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground pt-1 border-t border-slate-200/60 dark:border-slate-800">
+              <span>• <strong className="text-rose-600 dark:text-rose-400">Consignee Match:</strong> Flagged</span>
+              <span>• <strong className="text-fuchsia-600 dark:text-fuchsia-400">Consignee + Declarant Match:</strong> Flagged</span>
+              <span>• <strong className="text-slate-600 dark:text-slate-300">Declarant Match Only:</strong> Excluded (Not Flagged)</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <Input
+                value={orgRegistrySearch}
+                onChange={e => {
+                  const val = e.target.value;
+                  setOrgRegistrySearch(val);
+                  fetchOrganizationRegistry(val);
+                }}
+                placeholder="Search stored organization names..."
+                className="pl-8 h-9 text-xs dark:bg-[#070b14] dark:border-slate-800"
+              />
+            </div>
+
+            {canManageCusDec && (
+              <>
+                <input
+                  ref={orgUploadInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleUploadOrgRegistryFile}
+                  className="sr-only"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isUploadingOrgRegistry}
+                  onClick={() => orgUploadInputRef.current?.click()}
+                  className="h-9 gap-1.5 text-xs rounded-xl border-cyan-500/40 hover:border-cyan-500"
+                >
+                  {isUploadingOrgRegistry ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-500" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 text-cyan-500" />
+                  )}
+                  <span>{isUploadingOrgRegistry ? 'Importing...' : 'Replace Excel / CSV'}</span>
+                </Button>
+              </>
+            )}
+          </div>
+
+          <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-200/70 dark:divide-slate-800/80 bg-slate-50/40 dark:bg-[#070b14]/60">
+            {orgRegistryPreview.length === 0 ? (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                No matching organizations found in registry.
+              </div>
+            ) : (
+              orgRegistryPreview.map((org, idx) => (
+                <div key={`${org.normalizedKey}-${idx}`} className="px-3 py-2 flex items-center justify-between gap-3 text-xs">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-foreground truncate">{org.organizationName}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground truncate">
+                      Key: {org.normalizedKey}
+                    </div>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                      {org.certificateCount} cert{org.certificateCount > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/70 dark:border-slate-800">
+            {tallyFlagMetrics.activeExportCount > 0 ? (
+              <Button variant="outline" size="sm" asChild className="gap-1.5 text-xs rounded-xl border-rose-500/40 text-rose-600 dark:text-rose-400">
+                <a href={buildFlaggedExportUrl()} download>
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Export Flagged Excel ({tallyFlagMetrics.activeExportCount})</span>
+                </a>
+              </Button>
+            ) : (
+              <span className="text-[11px] text-muted-foreground">
+                Enable Tally Flag in Declarations tab to inspect matches
+              </span>
+            )}
+
+            <Button
+              type="button"
+              size="sm"
+              autoFocus
+              onClick={() => orgDialogRef.current?.close()}
+              className="rounded-xl px-5 text-xs"
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      </dialog>
 
       {/* ========================================================
            REALTIME MESSENGER CHAT WIDGET (Zero Delay VPS Storage)

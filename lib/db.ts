@@ -3,6 +3,7 @@ import path from 'path';
 import { CusDecRecord, Settings, Stats } from './types';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { isLocalStorageOnly } from './storage';
+import { attachTallyFlagToRecord, attachTallyFlags } from './organizationRegistry';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const RECORDS_FILE = path.join(DATA_DIR, 'records.json');
@@ -229,7 +230,7 @@ export async function getFreshRecords(): Promise<CusDecRecord[]> {
     await initSupabaseSync(true);
   }
   syncLedgerDuplicateFlags();
-  return recordsCache;
+  return attachTallyFlags(recordsCache);
 }
 
 // Background sync on startup if Supabase is active and not in local mode
@@ -240,11 +241,15 @@ if (isSupabaseConfigured() && !isLocalStorageOnly()) {
 // High-speed debounced disk persistence for local mode
 let saveDebounceTimer: NodeJS.Timeout | null = null;
 
+function stripTransientFields(records: CusDecRecord[]): CusDecRecord[] {
+  return records.map(({ tallyFlag, ...rest }) => rest);
+}
+
 export function scheduleRecordsSave(): void {
   if (saveDebounceTimer) return;
   saveDebounceTimer = setTimeout(() => {
     saveDebounceTimer = null;
-    writeJsonFile(RECORDS_FILE, recordsCache);
+    writeJsonFile(RECORDS_FILE, stripTransientFields(recordsCache));
   }, 150);
 }
 
@@ -253,7 +258,7 @@ export function flushRecordsSync(): void {
     clearTimeout(saveDebounceTimer);
     saveDebounceTimer = null;
   }
-  writeJsonFile(RECORDS_FILE, recordsCache);
+  writeJsonFile(RECORDS_FILE, stripTransientFields(recordsCache));
 }
 
 if (typeof process !== 'undefined') {
@@ -261,11 +266,12 @@ if (typeof process !== 'undefined') {
 }
 
 export function getRecords(): CusDecRecord[] {
-  return recordsCache;
+  return attachTallyFlags(recordsCache);
 }
 
 export function getRecordById(id: string): CusDecRecord | undefined {
-  return recordsCache.find(r => r.id === id);
+  const found = recordsCache.find(r => r.id === id);
+  return found ? attachTallyFlagToRecord(found) : undefined;
 }
 
 function getCleanOriginalName(filename?: string): string {
@@ -431,18 +437,19 @@ export async function saveRecord(record: CusDecRecord): Promise<CusDecRecord> {
     }
   }
 
-  return saved;
+  return attachTallyFlagToRecord(saved);
 }
 
 export async function updateRecord(id: string, updates: Partial<CusDecRecord>): Promise<CusDecRecord | null> {
   const idx = recordsCache.findIndex(r => r.id === id);
   if (idx >= 0) {
     const current = recordsCache[idx];
+    const { tallyFlag: _ignoredFlag, ...cleanUpdates } = updates;
     recordsCache[idx] = {
       ...current,
-      ...updates,
-      status: updates.status || (updates.manualCorrection ? 'CORRECTED' : current.status),
-      manualCorrection: updates.manualCorrection !== undefined ? updates.manualCorrection : true,
+      ...cleanUpdates,
+      status: cleanUpdates.status || (cleanUpdates.manualCorrection ? 'CORRECTED' : current.status),
+      manualCorrection: cleanUpdates.manualCorrection !== undefined ? cleanUpdates.manualCorrection : true,
       updatedAt: new Date().toISOString()
     };
     scheduleRecordsSave();
@@ -454,7 +461,7 @@ export async function updateRecord(id: string, updates: Partial<CusDecRecord>): 
       }
     }
 
-    return recordsCache[idx];
+    return attachTallyFlagToRecord(recordsCache[idx]);
   }
   return null;
 }

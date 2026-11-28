@@ -121,4 +121,17 @@ if (fs.existsSync(USERS_FILE)) {
   }
 }
 
+const ORG_REGISTRY_FILE = path.join(DATA_DIR, 'registered_organizations.json');
+const ORG_SEED_FILE = path.join(process.cwd(), 'scripts', 'registered_organizations_seed.json');
+
+if (!fs.existsSync(ORG_REGISTRY_FILE) && fs.existsSync(ORG_SEED_FILE)) {
+  try {
+    const rawOrgSeed = fs.readFileSync(ORG_SEED_FILE, 'utf8');
+    fs.writeFileSync(ORG_REGISTRY_FILE, rawOrgSeed, 'utf8');
+    console.log('[Sync VPS]: Seeded registered_organizations.json into data/ for local/memory Tally flagging.');
+  } catch (e) {
+    console.warn('[Sync VPS]: Organization registry seed warning:', e.message);
+  }
+}
+
 console.log('[Sync VPS]: Verification complete.');

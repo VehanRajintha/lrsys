@@ -24,6 +24,7 @@ import {
   Gauge,
   PieChart as PieChartIcon,
   Package,
+  Flag,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -346,6 +347,7 @@ export function StatisticsAnalyticsDeck({
   const [dateBasis, setDateBasis] = useState<DateBasis>('created');
   const [activePreset, setActivePreset] = useState<DatePreset>('all');
   const [trajectoryMode, setTrajectoryMode] = useState<TrajectoryViewMode>('velocity');
+  const [showTallyOverlay, setShowTallyOverlay] = useState(true);
   const [pieMode, setPieMode] = useState<'commodity' | 'fidelity'>('commodity');
   const [hoveredPieLabel, setHoveredPieLabel] = useState<string | null>(null);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
@@ -411,6 +413,10 @@ export function StatisticsAnalyticsDeck({
     date: string;
     total: number;
     cumulative: number;
+    flagged: number;
+    flaggedCumulative: number;
+    bothMatched: number;
+    consigneeOnly: number;
     rate: number;
   } | null>(null);
 
@@ -549,13 +555,16 @@ export function StatisticsAnalyticsDeck({
     }
   }, [records, dateBasis, startDate, endDate]);
 
-  // Daily Breakdown with Running Cumulative Count and Day-over-Day Deltas
+  // Daily Breakdown with Running Cumulative Count, Tally Flagged Series & Day-over-Day Deltas
   const dailyData = useMemo(() => {
     const dayMap = new Map<
       string,
       {
         date: string;
         total: number;
+        flagged: number;
+        bothMatched: number;
+        consigneeOnly: number;
         confidenceSum: number;
       }
     >();
@@ -567,12 +576,23 @@ export function StatisticsAnalyticsDeck({
         dayMap.set(d, {
           date: d,
           total: 0,
+          flagged: 0,
+          bothMatched: 0,
+          consigneeOnly: 0,
           confidenceSum: 0,
         });
       }
 
       const item = dayMap.get(d)!;
       item.total++;
+      if (r.tallyFlag?.isFlagged) {
+        item.flagged++;
+        if (r.tallyFlag.matchType === 'CONSIGNEE_AND_DECLARANT') {
+          item.bothMatched++;
+        } else {
+          item.consigneeOnly++;
+        }
+      }
       item.confidenceSum += Number(r.confidence || 0);
     });
 
@@ -586,14 +606,17 @@ export function StatisticsAnalyticsDeck({
 
     // Compute cumulative run-up & day-over-day deltas
     let runningTotal = 0;
+    let runningFlaggedTotal = 0;
     return list.map((item, idx) => {
       runningTotal += item.total;
+      runningFlaggedTotal += item.flagged;
       const prevDayTotal = idx > 0 ? list[idx - 1].total : item.total;
       const dayDelta = item.total - prevDayTotal;
       const dayDeltaPct = prevDayTotal > 0 ? Math.round((dayDelta / prevDayTotal) * 100) : 0;
       return {
         ...item,
         cumulative: runningTotal,
+        flaggedCumulative: runningFlaggedTotal,
         dayDelta,
         dayDeltaPct,
       };
@@ -697,6 +720,30 @@ export function StatisticsAnalyticsDeck({
     const max = Math.max(...dailyData.map((d) => d.cumulative), 1);
     return Math.ceil(max * 1.15);
   }, [dailyData]);
+
+  const tallySummary = useMemo(() => {
+    let totalFlagged = 0;
+    let bothCount = 0;
+    let consigneeOnlyCount = 0;
+    for (const d of dailyData) {
+      totalFlagged += d.flagged;
+      bothCount += d.bothMatched;
+      consigneeOnlyCount += d.consigneeOnly;
+    }
+    const flaggedRatePct =
+      metrics.total > 0 ? ((totalFlagged / metrics.total) * 100).toFixed(1) : '0.0';
+    const avgDailyFlagged = (totalFlagged / (dailyData.length || 1)).toFixed(1);
+    const latestCumulativeFlagged =
+      dailyData.length > 0 ? dailyData[dailyData.length - 1].flaggedCumulative : 0;
+    return {
+      totalFlagged,
+      bothCount,
+      consigneeOnlyCount,
+      flaggedRatePct,
+      avgDailyFlagged,
+      latestCumulativeFlagged,
+    };
+  }, [dailyData, metrics.total]);
 
   const maxMonthCount = useMemo(() => {
     const max = Math.max(...monthlyTelemetry.map((m) => m.count), 1);
@@ -862,9 +909,11 @@ export function StatisticsAnalyticsDeck({
     }
   };
 
-  // SVG Line Chart Coordinate Generator for the Cumulative Line Up Chart
+  // SVG Line Chart Coordinate Generator (Total CusDec Trajectory + Tally Flagged Overlay Curve)
   const svgLinePoints = useMemo(() => {
-    if (dailyData.length === 0) return { pathD: '', areaD: '', points: [] };
+    if (dailyData.length === 0) {
+      return { pathD: '', areaD: '', points: [], tallyPathD: '', tallyAreaD: '', tallyPoints: [] };
+    }
 
     const totalSvgWidth = Math.max(1050, 90 + dailyData.length * 42);
     const chartLeft = 55;
@@ -873,43 +922,58 @@ export function StatisticsAnalyticsDeck({
     const chartBottom = 225;
     const availableWidth = chartRight - chartLeft;
     const availableHeight = chartBottom - chartTop;
+    const maxVal = trajectoryMode === 'cumulative' ? maxCumulativeTotal : maxDayTotal;
 
-    const points = dailyData.map((d, index) => {
-      const x =
-        dailyData.length === 1
-          ? chartLeft + availableWidth / 2
-          : chartLeft + (index / (dailyData.length - 1)) * availableWidth;
+    const buildSeries = (getYVal: (d: (typeof dailyData)[number]) => number) => {
+      const pts = dailyData.map((d, index) => {
+        const x =
+          dailyData.length === 1
+            ? chartLeft + availableWidth / 2
+            : chartLeft + (index / (dailyData.length - 1)) * availableWidth;
 
-      const yVal = trajectoryMode === 'cumulative' ? d.cumulative : d.total;
-      const maxVal = trajectoryMode === 'cumulative' ? maxCumulativeTotal : maxDayTotal;
-      const y = chartBottom - (yVal / maxVal) * availableHeight;
+        const yVal = getYVal(d);
+        const y = chartBottom - (yVal / maxVal) * availableHeight;
+        return { x, y, yVal, data: d };
+      });
 
-      return { x, y, data: d };
-    });
+      if (pts.length === 1) {
+        const p = pts[0];
+        return {
+          pathD: `M ${p.x - 20} ${p.y} L ${p.x + 20} ${p.y}`,
+          areaD: `M ${p.x - 20} ${chartBottom} L ${p.x - 20} ${p.y} L ${p.x + 20} ${p.y} L ${p.x + 20} ${chartBottom} Z`,
+          pts,
+        };
+      }
 
-    if (points.length === 1) {
-      const p = points[0];
-      return {
-        pathD: `M ${p.x - 20} ${p.y} L ${p.x + 20} ${p.y}`,
-        areaD: `M ${p.x - 20} ${chartBottom} L ${p.x - 20} ${p.y} L ${p.x + 20} ${p.y} L ${p.x + 20} ${chartBottom} Z`,
-        points,
-      };
-    }
+      let pathD = `M ${pts[0].x} ${pts[0].y}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const curr = pts[i];
+        const next = pts[i + 1];
+        const midX = (curr.x + next.x) / 2;
+        pathD += ` C ${midX} ${curr.y}, ${midX} ${next.y}, ${next.x} ${next.y}`;
+      }
 
-    // Build smooth bezier curve
-    let pathD = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const curr = points[i];
-      const next = points[i + 1];
-      const midX = (curr.x + next.x) / 2;
-      pathD += ` C ${midX} ${curr.y}, ${midX} ${next.y}, ${next.x} ${next.y}`;
-    }
+      const first = pts[0];
+      const last = pts[pts.length - 1];
+      const areaD = `${pathD} L ${last.x} ${chartBottom} L ${first.x} ${chartBottom} Z`;
+      return { pathD, areaD, pts };
+    };
 
-    const first = points[0];
-    const last = points[points.length - 1];
-    const areaD = `${pathD} L ${last.x} ${chartBottom} L ${first.x} ${chartBottom} Z`;
+    const primary = buildSeries((d) =>
+      trajectoryMode === 'cumulative' ? d.cumulative : d.total
+    );
+    const tally = buildSeries((d) =>
+      trajectoryMode === 'cumulative' ? d.flaggedCumulative : d.flagged
+    );
 
-    return { pathD, areaD, points };
+    return {
+      pathD: primary.pathD,
+      areaD: primary.areaD,
+      points: primary.pts,
+      tallyPathD: tally.pathD,
+      tallyAreaD: tally.areaD,
+      tallyPoints: tally.pts,
+    };
   }, [dailyData, trajectoryMode, maxCumulativeTotal, maxDayTotal]);
 
   if (isLoading) {
@@ -1244,7 +1308,7 @@ export function StatisticsAnalyticsDeck({
             </CardDescription>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* View Mode Toggle */}
             <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/60 text-xs">
               <button
@@ -1273,11 +1337,46 @@ export function StatisticsAnalyticsDeck({
               </button>
             </div>
 
+            {/* Tally Flagged Indicator Overlay Toggle */}
+            <button
+              type="button"
+              aria-pressed={showTallyOverlay}
+              onClick={() => setShowTallyOverlay((prev) => !prev)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs active:scale-95',
+                showTallyOverlay
+                  ? 'bg-gradient-to-r from-rose-600 to-fuchsia-600 text-white border-rose-500/80 shadow-sm shadow-rose-500/25'
+                  : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 hover:border-rose-500/40'
+              )}
+              title="Toggle Tally Flagged indicator curve on this chart (Consignee & Consignee+Declarant matches)"
+            >
+              <Flag className={cn('w-3.5 h-3.5', showTallyOverlay ? 'text-white fill-white/25' : 'text-rose-500')} />
+              <span>Tally Graph</span>
+              <span
+                className={cn(
+                  'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold',
+                  showTallyOverlay
+                    ? 'bg-white/20 text-white'
+                    : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                )}
+              >
+                {tallySummary.totalFlagged}
+              </span>
+            </button>
+
             <Badge variant="outline" className="text-xs font-mono border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10">
               {trajectoryMode === 'velocity'
                 ? `Avg Daily Volume: ${metrics.avgDailyVolume} docs/day`
                 : `Total Run-Up: ${dailyData.length > 0 ? dailyData[dailyData.length - 1].cumulative : 0} docs`}
             </Badge>
+
+            {showTallyOverlay && (
+              <Badge variant="outline" className="text-xs font-mono border-rose-500/35 text-rose-600 dark:text-rose-400 bg-rose-500/10">
+                {trajectoryMode === 'velocity'
+                  ? `Tally Flagged: ${tallySummary.totalFlagged} (${tallySummary.flaggedRatePct}%)`
+                  : `Tally Run-Up: ${tallySummary.latestCumulativeFlagged} flagged`}
+              </Badge>
+            )}
           </div>
         </CardHeader>
 
@@ -1305,11 +1404,34 @@ export function StatisticsAnalyticsDeck({
                 setLineTooltipPos(null);
               }}
             >
+              {/* Dual Indicator Series Legend */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-2 text-xs">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 shadow-[0_0_8px_rgba(245,158,11,0.7)] inline-block" />
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      {trajectoryMode === 'velocity' ? 'All CusDec Declarations' : 'Cumulative Total Declarations'}
+                    </span>
+                  </div>
+                  {showTallyOverlay && (
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-gradient-to-r from-rose-500 to-fuchsia-500 shadow-[0_0_8px_rgba(244,63,94,0.7)] inline-block" />
+                      <span className="font-semibold text-rose-700 dark:text-rose-300">
+                        Tally Flagged Graph
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                        ({tallySummary.bothCount} Both · {tallySummary.consigneeOnlyCount} Consignee)
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Near-Cursor Floating Tooltip Card */}
               {hoveredLinePoint && (
                 <div
                   style={getDynamicTooltipStyle(lineTooltipPos, lineChartContainerRef)}
-                  className="p-3.5 rounded-2xl bg-white/95 dark:bg-[#070b14]/95 text-slate-900 dark:text-white border border-amber-500/30 dark:border-amber-500/40 shadow-xl shadow-slate-900/10 dark:shadow-2xl dark:shadow-amber-500/10 backdrop-blur-md text-xs space-y-1.5 w-[250px] select-none pointer-events-none transition-all"
+                  className="p-3.5 rounded-2xl bg-white/95 dark:bg-[#070b14]/95 text-slate-900 dark:text-white border border-amber-500/30 dark:border-amber-500/40 shadow-xl shadow-slate-900/10 dark:shadow-2xl dark:shadow-amber-500/10 backdrop-blur-md text-xs space-y-1.5 w-[265px] select-none pointer-events-none transition-all"
                 >
                   <div className="font-extrabold text-slate-900 dark:text-amber-400 text-sm flex items-center justify-between gap-2">
                     <span className="font-bold tracking-tight">{formatDateDisplay(hoveredLinePoint.date)}</span>
@@ -1327,6 +1449,26 @@ export function StatisticsAnalyticsDeck({
                     <span className="text-slate-500 dark:text-slate-400">Cumulative to date:</span>
                     <strong className="text-amber-700 dark:text-amber-400 font-mono font-bold">{hoveredLinePoint.cumulative} docs</strong>
                   </div>
+
+                  {showTallyOverlay && (
+                    <div className="pt-1.5 mt-1 border-t border-rose-500/25 space-y-1">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-semibold">
+                          <Flag className="w-3 h-3 fill-current" />
+                          <span>Tally Flagged (Day):</span>
+                        </span>
+                        <strong className="text-rose-600 dark:text-rose-300 font-mono font-bold">
+                          +{hoveredLinePoint.flagged} ({hoveredLinePoint.total > 0 ? Math.round((hoveredLinePoint.flagged / hoveredLinePoint.total) * 100) : 0}%)
+                        </strong>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                        <span>Both: {hoveredLinePoint.bothMatched} | Consignee: {hoveredLinePoint.consigneeOnly}</span>
+                        <span className="text-fuchsia-600 dark:text-fuchsia-400 font-bold">
+                          Cum: {hoveredLinePoint.flaggedCumulative}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1363,6 +1505,26 @@ export function StatisticsAnalyticsDeck({
                           </radialGradient>
                           <filter id="amberPointGlow" x="-50%" y="-50%" width="200%" height="200%">
                             <feDropShadow dx="0" dy="2" stdDeviation="5" floodColor="#f59e0b" floodOpacity="0.8" />
+                          </filter>
+
+                          {/* Tally Flagged Indicator Gradients & Glow */}
+                          <linearGradient id="tallyRoseAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.28" />
+                            <stop offset="65%" stopColor="#d946ef" stopOpacity="0.09" />
+                            <stop offset="100%" stopColor="#be123c" stopOpacity="0.0" />
+                          </linearGradient>
+                          <linearGradient id="tallyRoseLineGrad" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stopColor="#fb7185" />
+                            <stop offset="50%" stopColor="#f43f5e" />
+                            <stop offset="100%" stopColor="#d946ef" />
+                          </linearGradient>
+                          <radialGradient id="tallyNodeAura" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.38" />
+                            <stop offset="60%" stopColor="#d946ef" stopOpacity="0.14" />
+                            <stop offset="100%" stopColor="#f43f5e" stopOpacity="0" />
+                          </radialGradient>
+                          <filter id="tallyPointGlow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feDropShadow dx="0" dy="2" stdDeviation="5" floodColor="#f43f5e" floodOpacity="0.85" />
                           </filter>
                         </defs>
 
@@ -1406,12 +1568,17 @@ export function StatisticsAnalyticsDeck({
                           className="text-slate-200 dark:text-slate-700/80"
                         />
 
-                        {/* Filled Area below the curve */}
+                        {/* Filled Area below the Total curve */}
                         {svgLinePoints.areaD && (
                           <path d={svgLinePoints.areaD} fill="url(#warmAmberAreaGrad)" />
                         )}
 
-                        {/* Main Trajectory Curve Line */}
+                        {/* Filled Area below the Tally Flagged curve */}
+                        {showTallyOverlay && svgLinePoints.tallyAreaD && (
+                          <path d={svgLinePoints.tallyAreaD} fill="url(#tallyRoseAreaGrad)" />
+                        )}
+
+                        {/* Main Total Trajectory Curve Line */}
                         {svgLinePoints.pathD && (
                           <path
                             d={svgLinePoints.pathD}
@@ -1424,11 +1591,26 @@ export function StatisticsAnalyticsDeck({
                           />
                         )}
 
+                        {/* Tally Flagged Indicator Curve Line */}
+                        {showTallyOverlay && svgLinePoints.tallyPathD && (
+                          <path
+                            d={svgLinePoints.tallyPathD}
+                            fill="none"
+                            stroke="url(#tallyRoseLineGrad)"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="transition-all duration-300"
+                          />
+                        )}
+
                     {/* Interactive Data Point Nodes */}
                     {svgLinePoints.points.map((p, idx) => {
+                      const tp = svgLinePoints.tallyPoints[idx];
                       const isHovered = hoveredLinePoint?.date === p.data.date;
                       const availableWidth = lineSvgWidth - 85;
                       const colWidth = availableWidth / dailyData.length;
+                      const tallyLabelBelow = tp && Math.abs(tp.y - p.y) < 30 && tp.y + 20 < baselineY;
 
                       return (
                         <g
@@ -1445,6 +1627,10 @@ export function StatisticsAnalyticsDeck({
                               date: p.data.date,
                               total: p.data.total,
                               cumulative: p.data.cumulative,
+                              flagged: p.data.flagged,
+                              flaggedCumulative: p.data.flaggedCumulative,
+                              bothMatched: p.data.bothMatched,
+                              consigneeOnly: p.data.consigneeOnly,
                               rate: p.data.avgConfidence,
                             });
                           }}
@@ -1469,10 +1655,23 @@ export function StatisticsAnalyticsDeck({
                             fill="transparent"
                           />
 
-                          {/* Professional Motion Graphic Interactive Beacon on Hover */}
+                          {/* Vertical crosshair connector on hover */}
+                          {isHovered && (
+                            <line
+                              x1={p.x}
+                              y1={p.y}
+                              x2={p.x}
+                              y2={baselineY}
+                              stroke="currentColor"
+                              strokeDasharray="3 3"
+                              strokeWidth="1.25"
+                              className="text-slate-400/70 dark:text-slate-500/70 pointer-events-none"
+                            />
+                          )}
+
+                          {/* Professional Motion Graphic Interactive Beacon on Hover (Total) */}
                           {isHovered && (
                             <g className="pointer-events-none">
-                              {/* Ambient pulsating beacon aura */}
                               <circle
                                 cx={p.x}
                                 cy={p.y}
@@ -1480,8 +1679,6 @@ export function StatisticsAnalyticsDeck({
                                 fill="url(#amberNodeAura)"
                                 className="animate-pulse"
                               />
-
-                              {/* Precision reticle target ring */}
                               <circle
                                 cx={p.x}
                                 cy={p.y}
@@ -1491,8 +1688,6 @@ export function StatisticsAnalyticsDeck({
                                 strokeWidth="1.25"
                                 strokeOpacity="0.5"
                               />
-
-                              {/* Floating HUD micro-pill badge */}
                               <g className="animate-in fade-in zoom-in-95 duration-150">
                                 <rect
                                   x={p.x - 20}
@@ -1518,7 +1713,47 @@ export function StatisticsAnalyticsDeck({
                             </g>
                           )}
 
-                          {/* Clean Node Point */}
+                          {/* Hover Beacon for Tally Flagged Node */}
+                          {isHovered && showTallyOverlay && tp && (
+                            <g className="pointer-events-none">
+                              <circle
+                                cx={tp.x}
+                                cy={tp.y}
+                                r="13"
+                                fill="url(#tallyNodeAura)"
+                                className="animate-pulse"
+                              />
+                              <circle
+                                cx={tp.x}
+                                cy={tp.y}
+                                r="8.5"
+                                fill="none"
+                                stroke="#f43f5e"
+                                strokeWidth="1.25"
+                                strokeOpacity="0.55"
+                              />
+                              <g className="animate-in fade-in zoom-in-95 duration-150">
+                                <rect
+                                  x={tp.x - 22}
+                                  y={Math.abs(tp.y - p.y) < 38 ? tp.y + 12 : tp.y - 31}
+                                  width="44"
+                                  height="19"
+                                  rx="6"
+                                  className="fill-white dark:fill-[#070c18] stroke stroke-rose-500/60 shadow-md"
+                                />
+                                <text
+                                  x={tp.x}
+                                  y={Math.abs(tp.y - p.y) < 38 ? tp.y + 25 : tp.y - 18}
+                                  textAnchor="middle"
+                                  className="font-mono text-[11px] font-black fill-rose-600 dark:fill-rose-400 select-none tracking-tight"
+                                >
+                                  {trajectoryMode === 'cumulative' ? p.data.flaggedCumulative : p.data.flagged}
+                                </text>
+                              </g>
+                            </g>
+                          )}
+
+                          {/* Clean Node Point (Amber Total) */}
                           <circle
                             cx={p.x}
                             cy={p.y}
@@ -1530,7 +1765,6 @@ export function StatisticsAnalyticsDeck({
                             className="transition-all duration-200 ease-out"
                           />
 
-                          {/* Inner crisp pupil when hovered */}
                           {isHovered && (
                             <circle
                               cx={p.x}
@@ -1541,16 +1775,53 @@ export function StatisticsAnalyticsDeck({
                             />
                           )}
 
+                          {/* Tally Flagged Node Dot */}
+                          {showTallyOverlay && tp && (
+                            <>
+                              <circle
+                                cx={tp.x}
+                                cy={tp.y}
+                                r={isHovered ? 5.5 : 3.8}
+                                fill={isHovered ? '#f43f5e' : '#ffffff'}
+                                stroke="#f43f5e"
+                                strokeWidth={isHovered ? 2.5 : 2}
+                                filter={isHovered ? 'url(#tallyPointGlow)' : undefined}
+                                className="transition-all duration-200 ease-out"
+                              />
+                              {isHovered && (
+                                <circle
+                                  cx={tp.x}
+                                  cy={tp.y}
+                                  r="1.8"
+                                  fill="#ffffff"
+                                  className="pointer-events-none"
+                                />
+                              )}
+                            </>
+                          )}
+
                           {/* Top value badge on point (resting non-hovered state) */}
                           {!isHovered && idx % Math.ceil(dailyData.length / 8) === 0 && (
-                            <text
-                              x={p.x}
-                              y={p.y - 10}
-                              textAnchor="middle"
-                              className="font-mono text-xs font-bold transition-all select-none fill-amber-600/80 dark:fill-amber-400/80"
-                            >
-                              {trajectoryMode === 'cumulative' ? p.data.cumulative : p.data.total}
-                            </text>
+                            <>
+                              <text
+                                x={p.x}
+                                y={p.y - 10}
+                                textAnchor="middle"
+                                className="font-mono text-xs font-bold transition-all select-none fill-amber-600/80 dark:fill-amber-400/80"
+                              >
+                                {trajectoryMode === 'cumulative' ? p.data.cumulative : p.data.total}
+                              </text>
+                              {showTallyOverlay && tp && (
+                                <text
+                                  x={tp.x}
+                                  y={tallyLabelBelow ? tp.y + 17 : tp.y - 9}
+                                  textAnchor="middle"
+                                  className="font-mono text-[11px] font-bold transition-all select-none fill-rose-600 dark:fill-rose-400"
+                                >
+                                  {trajectoryMode === 'cumulative' ? p.data.flaggedCumulative : p.data.flagged}
+                                </text>
+                              )}
+                            </>
                           )}
 
                           {/* X-axis date text */}

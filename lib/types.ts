@@ -8,6 +8,43 @@ export interface BoundingBoxes {
 
 export type RecordStatus = 'VERIFIED' | 'NEEDS_REVIEW' | 'CORRECTED';
 
+export type CusDecTallyFlagTier = 'NONE' | 'CONSIGNEE_ONLY' | 'CONSIGNEE_AND_DECLARANT';
+
+export interface CusDecTallyFlag {
+  isFlagged: boolean;
+  matchType: CusDecTallyFlagTier;
+  consigneeMatched: boolean;
+  declarantMatched: boolean;
+  matchedConsigneeOrg?: string | null;
+  matchedDeclarantOrg?: string | null;
+  consigneeCertCount?: number;
+  consigneeLatestExpiry?: string;
+  declarantCertCount?: number;
+  declarantLatestExpiry?: string;
+}
+
+export interface RegisteredOrganizationEntry {
+  organizationName: string;
+  normalizedKey: string;
+  aliases?: string[];
+  certificateCount: number;
+  certificateType?: string;
+  latestEffectiveDate?: string;
+  latestExpirationDate?: string;
+  latestSerialNumber?: string;
+}
+
+export interface OrganizationRegistryMeta {
+  sourceFile: string;
+  asOfLabel?: string;
+  importedAt: string;
+  totalCertificates: number;
+  uniqueOrganizations: number;
+  declaredUniqueCount?: number;
+  totalRegisteredCompaniesNote?: number;
+  persistenceMode: 'memory+local-disk';
+}
+
 export interface CusDecRecord {
   id: string;
   filename: string;
@@ -36,6 +73,7 @@ export interface CusDecRecord {
   macroZoomApplied?: boolean;
   matchedMasterName?: string | null;
   isDuplicate?: boolean;
+  tallyFlag?: CusDecTallyFlag;
 }
 
 export interface Settings {

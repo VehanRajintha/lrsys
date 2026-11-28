@@ -434,7 +434,7 @@ export async function generateStatisticsExcel(
     },
   });
 
-  const dailyColWidths = [6, 14, 24, 18, 20, 18, 20, 18, 24];
+  const dailyColWidths = [6, 14, 24, 18, 20, 18, 20, 18, 24, 20, 22];
   dailyColWidths.forEach((w, i) => {
     wsDaily.getColumn(i + 1).width = w;
   });
@@ -442,9 +442,9 @@ export async function generateStatisticsExcel(
   styleBanner(
     wsDaily,
     1,
-    9,
+    11,
     'DAILY & MONTHLY CUSDEC TELEMETRY LEDGER',
-    `Date Basis: ${basisLabel}   |   Range: ${startDate} to ${endDate}   |   Source Data for Intake Trendline, Daily Volume & Monthly Charts`,
+    `Date Basis: ${basisLabel}   |   Range: ${startDate} to ${endDate}   |   Source Data for Intake Trendline, Tally Indicator, Daily Volume & Monthly Charts`,
     'FFF59E0B'
   );
   wsDaily.getRow(4).height = 10;
@@ -459,6 +459,8 @@ export async function generateStatisticsExcel(
     'Day Delta (%)',
     'Volume Intensity',
     'Mean OCR Accuracy',
+    'Tally Flagged (Daily)',
+    'Tally Flagged (Cum.)',
   ];
   const dailyHdrRow = wsDaily.getRow(5);
   dailyHdrRow.height = 26;
@@ -479,9 +481,13 @@ export async function generateStatisticsExcel(
           {
             date: startDate,
             total: 0,
+            flagged: 0,
+            bothMatched: 0,
+            consigneeOnly: 0,
             confidenceSum: 0,
             avgConfidence: 0,
             cumulative: 0,
+            flaggedCumulative: 0,
             dayDelta: 0,
             dayDeltaPct: 0,
           },
@@ -551,7 +557,19 @@ export async function generateStatisticsExcel(
     cAcc.font = { name: FONT_NAME, size: 10, bold: true, color: { argb: 'FF047857' } };
     cAcc.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    for (let c = 1; c <= 9; c++) {
+    const cTallyDaily = row.getCell(10);
+    cTallyDaily.value = d.flagged;
+    cTallyDaily.numFmt = '#,##0';
+    cTallyDaily.font = { name: FONT_NAME, size: 10.5, bold: true, color: { argb: 'FFE11D48' } };
+    cTallyDaily.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const cTallyCum = row.getCell(11);
+    cTallyCum.value = d.flaggedCumulative;
+    cTallyCum.numFmt = '#,##0';
+    cTallyCum.font = { name: FONT_NAME, size: 10.5, bold: true, color: { argb: 'FFC026D3' } };
+    cTallyCum.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    for (let c = 1; c <= 11; c++) {
       const cell = row.getCell(c);
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
       cell.border = thinBorder('FFE2E8F0');
@@ -590,7 +608,17 @@ export async function generateStatisticsExcel(
   };
   totalRow.getCell(9).numFmt = '0.0%';
 
-  for (let c = 1; c <= 9; c++) {
+  const totalFlaggedCount = safeDailyRows.reduce((acc, r) => acc + (r.flagged || 0), 0);
+  totalRow.getCell(10).value = { formula: `SUM(J${dailyStartRow}:J${dailyEndRow})`, result: totalFlaggedCount };
+  totalRow.getCell(10).numFmt = '#,##0';
+
+  totalRow.getCell(11).value = {
+    formula: `MAX(K${dailyStartRow}:K${dailyEndRow})`,
+    result: safeDailyRows[safeDailyRows.length - 1]?.flaggedCumulative || 0,
+  };
+  totalRow.getCell(11).numFmt = '#,##0';
+
+  for (let c = 1; c <= 11; c++) {
     const cell = totalRow.getCell(c);
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
     cell.font = { name: FONT_NAME, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -1135,17 +1163,19 @@ export async function generateStatisticsExcel(
   const dayCats = safeDailyRows.map((d) => formatStatsDayLabel(d.date));
   const dayDailyVals = safeDailyRows.map((d) => d.total);
   const dayCumVals = safeDailyRows.map((d) => d.cumulative);
+  const dayTallyVals = safeDailyRows.map((d) => d.flagged);
+  const dayTallyCumVals = safeDailyRows.map((d) => d.flaggedCumulative);
   const peakIdx = safeDailyRows.findIndex((d) => d.total === metrics.peakDay.total && d.total > 0);
   const dayBarColors = safeDailyRows.map((_, i) => (i === peakIdx ? '06B6D4' : '2563EB'));
 
-  // CHART 1 (Sheet 1, Full-width Top): Smooth Line Chart (Trendline OR Cumulative Curve)
+  // CHART 1 (Sheet 1, Full-width Top): Smooth Line Chart (Trendline OR Cumulative Curve + Tally Flagged Series)
   const useCumulativeLine = trajectoryMode === 'cumulative';
   charts.push({
     sheetIndex: 1,
     type: 'line',
     title: useCumulativeLine
-      ? 'Cumulative CusDec Intake Trajectory (Ascending Volume Curve)'
-      : 'Daily CusDec Intake Trendline (Volume Velocity Trajectory)',
+      ? 'Cumulative CusDec Intake & Tally Flagged Trajectory'
+      : 'Daily CusDec Intake & Tally Flagged Trendline',
     anchor: { fromCol: 1, fromRow: 10, toCol: 15, toRow: 25 },
     categoriesFormula: `'Daily Telemetry'!$B$${dailyStartRow}:$B$${dailyEndRow}`,
     categories: dayCats,
@@ -1158,6 +1188,16 @@ export async function generateStatisticsExcel(
           : `'Daily Telemetry'!$D$${dailyStartRow}:$D$${dailyEndRow}`,
         values: useCumulativeLine ? dayCumVals : dayDailyVals,
         color: 'F59E0B',
+        smooth: true,
+      },
+      {
+        name: useCumulativeLine ? 'Cumulative Tally Flagged' : 'Tally Flagged',
+        nameFormula: useCumulativeLine ? `'Daily Telemetry'!$K$5` : `'Daily Telemetry'!$J$5`,
+        valuesFormula: useCumulativeLine
+          ? `'Daily Telemetry'!$K$${dailyStartRow}:$K$${dailyEndRow}`
+          : `'Daily Telemetry'!$J$${dailyStartRow}:$J$${dailyEndRow}`,
+        values: useCumulativeLine ? dayTallyCumVals : dayTallyVals,
+        color: 'E11D48',
         smooth: true,
       },
     ],
